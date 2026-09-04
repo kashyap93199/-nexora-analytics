@@ -1,0 +1,49 @@
+"""Dashboard overview endpoint."""
+
+from datetime import date, timedelta
+
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.orm import Session
+
+from app.api.deps import get_membership, require_permission
+from app.auth.permissions import P_DASHBOARD_VIEW
+from app.database.db import get_db
+from app.models import OrganizationMember
+from app.services import analytics
+
+router = APIRouter(prefix="/dashboard", tags=["dashboard"])
+
+
+def _default_range() -> tuple[date, date]:
+    end = date.today()
+    start = end - timedelta(days=29)
+    return start, end
+
+
+@router.get("/overview")
+def overview(
+    start: date | None = Query(None),
+    end: date | None = Query(None),
+    member: OrganizationMember = Depends(require_permission(P_DASHBOARD_VIEW)),
+    db: Session = Depends(get_db),
+) -> dict:
+    org_id = member.organization_id
+    if start is None or end is None:
+        start, end = _default_range()
+    if start > end:
+        start, end = end, start
+
+    kpis = analytics.kpis(db, org_id, start, end)
+    return {
+        "range": {"start": start.isoformat(), "end": end.isoformat()},
+        "kpis": kpis,
+        "revenue_series": analytics.revenue_series(db, org_id, start, end, "month"),
+        "sales_series": analytics.sales_series(db, org_id, start, end, "month"),
+        "customer_series": analytics.customer_series(db, org_id, start, end, "month"),
+        "revenue_by_category": analytics.revenue_by_category(db, org_id, start, end),
+        "revenue_by_source": analytics.revenue_by_source(db, org_id, start, end),
+        "geographic": analytics.geographic_performance(db, org_id, start, end),
+        "top_products": analytics.top_products(db, org_id, start, end, limit=5),
+        "recent_orders": analytics.recent_orders(db, org_id, limit=8),
+        "low_stock": analytics.low_stock_products(db, org_id, limit=5),
+    }

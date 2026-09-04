@@ -1,0 +1,31 @@
+# ---- Secrets & local env ----
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# ---- Python / backend ----
+backend/.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+backend/*.db
+backend/*.sqlite3
+backend/.coverage
+
+# ---- Node / frontend ----
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+*.tsbuildinfo
+frontend/coverage/
+
+# ---- Editors / OS ----
+.vscode/
+.idea/
+.DS_Store
+*.swp
+npm-debug.log*
