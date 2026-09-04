@@ -36,6 +36,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, [refreshMe]);
 
+  // A failed token refresh anywhere in the app ends the session.
+  useEffect(() => {
+    const onSessionExpired = () => {
+      tokenStore.clear();
+      setMe(null);
+      setStatus("guest");
+    };
+    window.addEventListener("nexora:session-expired", onSessionExpired);
+    return () => window.removeEventListener("nexora:session-expired", onSessionExpired);
+  }, []);
+
   const applyAuth = useCallback(
     async (auth: AuthResponse) => {
       tokenStore.set(auth);

@@ -297,16 +297,18 @@ def customer_series(db: Session, org_id: int, start: date, end: date, interval: 
     interval = interval if interval in INTERVALS else "month"
     start_dt, end_dt = period_bounds(start, end)
 
-    # Customers created per bucket.
+    # Customers created per bucket (id included so each is counted exactly once).
     created_rows = (
-        db.query(Customer.created_at)
+        db.query(Customer.created_at, Customer.id)
         .filter(Customer.organization_id == org_id, Customer.created_at >= start_dt, Customer.created_at <= end_dt)
+        .order_by(Customer.created_at.asc())
         .all()
     )
     # Customers with an order per bucket (active in bucket).
     active_rows = (
         db.query(Order.placed_at, Order.customer_id)
         .filter(Order.organization_id == org_id, Order.placed_at >= start_dt, Order.placed_at <= end_dt, Order.customer_id.isnot(None))
+        .order_by(Order.placed_at.asc())
         .all()
     )
     customers_before = set(
@@ -314,42 +316,48 @@ def customer_series(db: Session, org_id: int, start: date, end: date, interval: 
         for (cid,) in db.query(Customer.id).filter(Customer.organization_id == org_id, Customer.created_at < start_dt).all()
     )
 
+    # Created customers by bucket. They are new in their creation bucket and
+    # then count as "known" for every later bucket (no double counting).
+    created_by_bucket: dict[str, set] = {}
     buckets: dict[str, dict] = {}
     order: list[str] = []
-    active_in_bucket: dict[str, set] = {}
 
-    for (created_at,) in created_rows:
+    for created_at, cid in created_rows:
         key = bucket_key(created_at, interval)
         if key not in buckets:
             buckets[key] = {"key": key, "label": bucket_label(created_at, interval), "new": 0, "returning": 0, "total": 0}
             order.append(key)
-            active_in_bucket[key] = set()
-        buckets[key]["new"] += 1
+            created_by_bucket[key] = set()
+        created_by_bucket[key].add(cid)
 
-    # Assign each active customer to their bucket, split new vs returning.
-    seen_new: set = set()
+    # Customers active (ordered) in each bucket.
+    active_in_bucket: dict[str, set] = {}
     for placed_at, customer_id in active_rows:
         key = bucket_key(placed_at, interval)
         if key not in buckets:
             buckets[key] = {"key": key, "label": bucket_label(placed_at, interval), "new": 0, "returning": 0, "total": 0}
             order.append(key)
-            active_in_bucket[key] = set()
-        active_in_bucket[key].add(customer_id)
+        active_in_bucket.setdefault(key, set()).add(customer_id)
 
+    # Process buckets chronologically so "seen" semantics stay correct
+    # (bucket keys are ISO dates and sort lexicographically in time order).
+    order = sorted(set(order))
+    seen: set = set(customers_before)
     cumulative = 0
     for key in order:
         b = buckets[key]
-        b_new = 0
+        b_new = len(created_by_bucket.get(key, set()))
+        seen |= created_by_bucket.get(key, set())
         b_returning = 0
         for cid in active_in_bucket.get(key, set()):
-            if cid in seen_new or cid in customers_before:
+            if cid in seen:
                 b_returning += 1
             else:
                 b_new += 1
-                seen_new.add(cid)
-        b["new"] += b_new
+                seen.add(cid)
+        b["new"] = b_new
         b["returning"] = b_returning
-        cumulative += b["new"]
+        cumulative += b_new
         b["total"] = cumulative
 
     return {"interval": interval, "points": [buckets[k] for k in order]}
@@ -395,6 +403,7 @@ def geographic_performance(db: Session, org_id: int, start: date, end: date) -> 
         .filter(
             Order.organization_id == org_id,
             Order.region.isnot(None),
+            Order.status.in_(REVENUE_STATUSES),
             Order.placed_at >= start_dt,
             Order.placed_at <= end_dt,
         )
@@ -420,6 +429,7 @@ def product_performance(
             Product.status,
             Product.price,
             Product.cost,
+            Category.id,
             Category.name,
             func.sum(OrderItem.quantity),
             func.sum(OrderItem.total),
@@ -437,7 +447,7 @@ def product_performance(
     )
     if category_id:
         query = query.filter(Product.category_id == category_id)
-    rows = query.group_by(Product.id, Product.name, Product.stock, Product.status, Product.price, Product.cost, Category.name).all()
+    rows = query.group_by(Product.id, Product.name, Product.stock, Product.status, Product.price, Product.cost, Category.id, Category.name).all()
 
     # Previous-period units for trend.
     prev_rows = (
@@ -456,7 +466,7 @@ def product_performance(
     prev_units = {pid: int(q) for pid, q in prev_rows}
 
     result = []
-    for pid, name, stock, status, price, cost, cat_name, units, revenue in rows:
+    for pid, name, stock, status, price, cost, cat_id, cat_name, units, revenue in rows:
         units = int(units or 0)
         cat_name = cat_name or "Uncategorized"
         revenue = _round(revenue)
@@ -470,7 +480,7 @@ def product_performance(
                 "id": pid,
                 "name": name,
                 "category": cat_name,
-                "category_id": category_id,
+                "category_id": cat_id,
                 "units_sold": units,
                 "revenue": revenue,
                 "profit": profit,

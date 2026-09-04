@@ -1,12 +1,10 @@
 """Customer endpoints (organization-scoped)."""
 
-from datetime import datetime
-
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_membership, pagination_params, require_permission
+from app.api.deps import pagination_params, require_permission
 from app.auth.permissions import P_CUSTOMERS_MANAGE, P_CUSTOMERS_VIEW
 from app.database.db import get_db
 from app.models import Customer, Order, OrganizationMember

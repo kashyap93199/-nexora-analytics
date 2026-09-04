@@ -1,7 +1,5 @@
 """RBAC tests: each role can/cannot perform the expected actions."""
 
-from fastapi.testclient import TestClient
-
 from uuid import uuid4
 
 from fastapi.testclient import TestClient

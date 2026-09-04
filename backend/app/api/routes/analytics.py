@@ -5,7 +5,7 @@ from datetime import date, timedelta
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_membership, require_permission
+from app.api.deps import require_permission
 from app.auth.permissions import P_ANALYTICS_VIEW, P_SALES_VIEW
 from app.database.db import get_db
 from app.models import OrganizationMember

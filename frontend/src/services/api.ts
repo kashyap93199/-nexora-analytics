@@ -36,6 +36,7 @@ async function refreshAccessToken(): Promise<string | null> {
         });
         if (!res.ok) {
           tokenStore.clear();
+          window.dispatchEvent(new Event("nexora:session-expired"));
           return null;
         }
         const data = (await res.json()) as AuthResponse;
@@ -43,6 +44,7 @@ async function refreshAccessToken(): Promise<string | null> {
         return data.access_token;
       } catch {
         tokenStore.clear();
+        window.dispatchEvent(new Event("nexora:session-expired"));
         return null;
       } finally {
         refreshPromise = null;
@@ -95,7 +97,7 @@ async function request<T>(path: string, options: RequestInit = {}, retried = fal
 }
 
 export const api = {
-  get: <T>(path: string) => request<T>(path),
+  get: <T>(path: string, options?: RequestInit) => request<T>(path, options),
   post: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: "POST", body: body === undefined ? undefined : JSON.stringify(body) }),
   put: <T>(path: string, body?: unknown) =>

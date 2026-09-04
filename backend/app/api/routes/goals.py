@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_membership, require_permission
+from app.api.deps import require_permission
 from app.auth.permissions import P_GOALS_MANAGE, P_GOALS_VIEW
 from app.database.db import get_db
 from app.models import Goal, OrganizationMember

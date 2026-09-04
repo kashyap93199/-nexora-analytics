@@ -16,7 +16,6 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from app.database.db import Base, SessionLocal, engine  # noqa: E402
 from app.main import app  # noqa: E402
-from app.models import Category, Product  # noqa: E402
 from app.services.bootstrap import sync_roles_and_permissions  # noqa: E402
 
 

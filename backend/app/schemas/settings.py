@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 class ProfileUpdate(BaseModel):
@@ -13,12 +13,14 @@ class PasswordChange(BaseModel):
     current_password: str = Field(min_length=1, max_length=128)
     new_password: str = Field(min_length=8, max_length=128)
 
-    def __init__(self, **data) -> None:  # noqa: D105
-        super().__init__(**data)
-        if not any(c.isdigit() for c in self.new_password):
+    @field_validator("new_password")
+    @classmethod
+    def password_strength(cls, v: str) -> str:
+        if not any(c.isdigit() for c in v):
             raise ValueError("New password must contain at least one number")
-        if not any(c.isupper() for c in self.new_password):
+        if not any(c.isupper() for c in v):
             raise ValueError("New password must contain at least one uppercase letter")
+        return v
 
 
 class OrgUpdate(BaseModel):

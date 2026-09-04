@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_membership, get_current_user, require_permission
-from app.auth.permissions import P_ORG_MANAGE, P_SETTINGS_MANAGE
+from app.auth.permissions import P_ORG_MANAGE
 from app.auth.security import hash_password, verify_password
 from app.database.db import get_db
 from app.models import Organization, OrganizationMember, User

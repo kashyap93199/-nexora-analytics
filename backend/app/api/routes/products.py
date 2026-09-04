@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
-from app.api.deps import get_membership, pagination_params, require_permission
+from app.api.deps import pagination_params, require_permission
 from app.auth.permissions import P_PRODUCTS_MANAGE, P_PRODUCTS_VIEW
 from app.database.db import get_db
 from app.models import Category, OrganizationMember, Product

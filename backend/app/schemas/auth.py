@@ -1,14 +1,20 @@
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 
 class RegisterIn(BaseModel):
     full_name: str = Field(min_length=2, max_length=120)
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
-    organization_name: str = Field(min_length=2, max_length=120)
+    organization_name: str | None = Field(default=None, min_length=2, max_length=120)
     invite_token: str | None = None
+
+    @model_validator(mode="after")
+    def org_name_required_without_invite(self) -> "RegisterIn":
+        if self.invite_token is None and not self.organization_name:
+            raise ValueError("organization_name is required when not accepting an invitation")
+        return self
 
     @field_validator("password")
     @classmethod

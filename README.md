@@ -95,6 +95,7 @@ Business-Analytics-SaaS-project/
 │   │   ├── services/           # analytics + bootstrap + seeder
 │   │   └── utils/              # audit logging
 │   ├── scripts/smoke_test.py   # end-to-end API smoke test
+│   ├── scripts/audit_runtime.py  # runtime QA: user journeys + RBAC + tenancy
 │   ├── tests/                  # pytest suite (auth/RBAC/tenancy/analytics)
 │   ├── Dockerfile
 │   └── requirements.txt
@@ -215,6 +216,7 @@ email to get a fresh, empty organization.
 | --- | --- | --- |
 | Backend (`backend/tests/`) | Registration/login/refresh/validation, RBAC for all 5 roles, **tenant isolation**, analytics math on controlled data, goal progress, date-range filtering | `cd backend && .venv/bin/python -m pytest` (22 tests) |
 | Backend smoke | End-to-end CRUD + auth + export against the seeded DB | `python scripts/smoke_test.py` |
+| Runtime QA | User journeys, invite flow, RBAC attempts, tenancy ID-swap, report exports | `PYTHONPATH=. python scripts/audit_runtime.py` |
 | Frontend (Vitest) | Validators, date presets, formatting, Badge/Button/Delta/ProgressBar/StatCard, **registration form validation flow** | `cd frontend && npm run test` (24 tests) |
 
 ## 🐳 Docker

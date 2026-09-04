@@ -20,10 +20,10 @@ COPY app ./app
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD curl -sf http://127.0.0.1:8000/api/health || exit 1
+    CMD sh -c 'curl -sf http://127.0.0.1:${PORT:-8000}/api/health || exit 1'
 
 # Run as a non-root user
 RUN useradd --create-home --uid 10001 nexora && chown -R nexora:nexora /app
 USER nexora
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 2"]

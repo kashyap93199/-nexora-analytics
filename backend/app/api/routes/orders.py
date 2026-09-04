@@ -6,12 +6,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_membership, pagination_params, require_permission
+from app.api.deps import pagination_params, require_permission
 from app.auth.permissions import P_ORDERS_MANAGE, P_ORDERS_VIEW
 from app.database.db import get_db
 from app.models import Customer, Order, OrderItem, OrganizationMember, Product
 from app.schemas.commerce import OrderCreate, OrderOut, OrderStatusUpdate
-from app.schemas.common import MessageOut, Page
+from app.schemas.common import Page
 from app.utils.audit import write_audit
 
 router = APIRouter(prefix="/orders", tags=["orders"])

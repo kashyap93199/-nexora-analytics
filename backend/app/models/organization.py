@@ -77,6 +77,7 @@ class OrganizationMember(Base):
     role: Mapped[str] = mapped_column(String(40), default="viewer", nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="active", nullable=False)  # active | pending
     invite_token: Mapped[str | None] = mapped_column(String(120), unique=True, index=True)
+    invite_email: Mapped[str | None] = mapped_column(String(255))  # email the invite was sent to (pending only)
     last_active_at: Mapped[datetime | None] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
 

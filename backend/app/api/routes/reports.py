@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_membership, require_permission
+from app.api.deps import require_permission
 from app.auth.permissions import P_REPORTS_CREATE, P_REPORTS_VIEW
 from app.database.db import get_db
 from app.models import Notification, OrganizationMember, Report
@@ -178,8 +178,16 @@ def export_report(report_id: int, member: OrganizationMember = Depends(require_p
     if not rows:
         rows = [{"message": "No data"}]
 
+    # Some report types mix row shapes (e.g. revenue: Metric rows then Period
+    # rows). Union all keys so every column appears and no row is dropped.
+    fieldnames = []
+    for row in rows:
+        for key in row.keys():
+            if key not in fieldnames:
+                fieldnames.append(key)
+
     buffer = io.StringIO()
-    writer = csv.DictWriter(buffer, fieldnames=list(rows[0].keys()))
+    writer = csv.DictWriter(buffer, fieldnames=fieldnames, extrasaction="ignore")
     writer.writeheader()
     writer.writerows(rows)
     buffer.seek(0)

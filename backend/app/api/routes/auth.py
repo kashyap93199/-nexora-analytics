@@ -4,7 +4,6 @@ import re
 
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_membership
@@ -80,9 +79,10 @@ def register(payload: RegisterIn, db: Session = Depends(get_db)) -> AuthResponse
         org = member.organization
         write_audit(db, org.id, user.id, "member.accepted_invite", "organization", org.id)
     else:
+        org_name = payload.organization_name or "My Organization"
         org = Organization(
-            name=payload.organization_name,
-            slug=_org_slug(payload.organization_name),
+            name=org_name,
+            slug=_org_slug(org_name),
             plan="free",
             currency="USD",
         )
@@ -151,9 +151,6 @@ def me(
     member: OrganizationMember = Depends(get_membership),
     db: Session = Depends(get_db),
 ) -> dict:
-    from app.api.deps import role_has_permission
-
-    role_obj = None
     from app.models import Role
 
     role_obj = db.query(Role).filter(Role.name == member.role).first()

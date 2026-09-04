@@ -52,3 +52,13 @@ def init_db() -> None:
     from app import models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
+
+    # Lightweight migrations for pre-existing dev databases (no Alembic in
+    # this project). Adding a nullable column is safe on SQLite and Postgres.
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(engine)
+    cols = {c["name"] for c in inspector.get_columns("organization_members")}
+    if "invite_email" not in cols:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE organization_members ADD COLUMN invite_email VARCHAR(255)"))

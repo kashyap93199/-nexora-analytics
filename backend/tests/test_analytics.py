@@ -3,7 +3,7 @@
 We build a small controlled dataset through the API and assert exact numbers.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
@@ -28,7 +28,7 @@ def _add_sales_record(db: Session, org_id: int, product_id: int, conversions: in
         SalesRecord(
             organization_id=org_id,
             product_id=product_id,
-            date=datetime.utcnow(),
+            date=datetime.now(UTC).replace(tzinfo=None),
             region="Europe",
             channel="online",
             units_sold=conversions,

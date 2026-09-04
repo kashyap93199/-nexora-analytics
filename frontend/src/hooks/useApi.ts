@@ -38,7 +38,7 @@ export function useApi<T>(path: string | null, depsKey?: string | number | null)
     setError(null);
 
     api
-      .get<T>(effectivePath)
+      .get<T>(effectivePath, { signal: controller.signal })
       .then((result) => {
         if (active) {
           setData(result);

@@ -2,10 +2,10 @@
 
 import secrets
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_membership, require_permission
+from app.api.deps import require_permission
 from app.auth.permissions import P_TEAM_MANAGE, P_TEAM_VIEW
 from app.database.db import get_db
 from app.models import Notification, OrganizationMember, User
@@ -22,7 +22,7 @@ def _to_out(member: OrganizationMember) -> MemberOut:
         id=member.id,
         user_id=member.user_id,
         full_name=member.user.full_name if member.user else "Invited",
-        email=member.user.email if member.user else "pending@invite",
+        email=member.user.email if member.user else (member.invite_email or "pending@invite"),
         role=member.role,
         status=member.status,
         last_active_at=member.last_active_at,
@@ -99,6 +99,7 @@ def invite_member(
             role=payload.role,
             status="pending",
             invite_token=token,
+            invite_email=payload.email.lower(),
         )
         db.add(new_member)
 

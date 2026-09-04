@@ -134,6 +134,12 @@ def _month_end(d: date) -> datetime:
 
 
 def seed_demo(db: Session) -> None:
+    """Seed the demo workspace. Idempotent: re-running never duplicates data.
+
+    Users/members/roles/categories/products are upserted; orders, customers,
+    sales and revenue records are only generated when the demo organization
+    has no orders yet (so `docker compose up` restarts do not double data).
+    """
     rng = random.Random(42)
     today = date.today()
     start_date = today - timedelta(days=730)
@@ -185,6 +191,15 @@ def seed_demo(db: Session) -> None:
             )
         )
     db.flush()
+
+    # Skip transactional data generation if the demo org already has orders.
+    org_has_data = (
+        db.query(Order.id).filter(Order.organization_id == org.id).first() is not None
+    )
+    if org_has_data:
+        db.commit()
+        print("ℹ️  Demo workspace already seeded — skipping data generation (idempotent).")
+        return
 
     # ------------------------------------------------------------- categories
     categories: dict[str, Category] = {}
@@ -253,6 +268,7 @@ def seed_demo(db: Session) -> None:
     order_numbers = {on for (on,) in db.query(Order.order_number).filter(Order.organization_id == org.id).all()}
     customer_ids = [c.id for c in customers]
     customer_created = {c.id: c.created_at.date() for c in customers}
+    customer_created_dt = {c.id: c.created_at for c in customers}
 
     order_batch: list[Order] = []
     per_day_units: dict[tuple[date, int], int] = {}
@@ -266,13 +282,22 @@ def seed_demo(db: Session) -> None:
         weekend = 1.4 if day.weekday() >= 5 else 1.0
         count = max(2, int(round(6 * growth * seasonal * weekend)) + rng.randint(-3, 6))
 
+        # Only customers that already existed on this day may order (keeps
+        # created_at <= first order invariant that analytics rely on).
+        eligible = [cid for cid in customer_ids if customer_created[cid] <= day]
+        if not eligible:
+            day += timedelta(days=1)
+            continue
+
         for _ in range(count):
             placed_at = _at(day, rng.randint(8, 21)) + timedelta(minutes=rng.randint(0, 59), seconds=rng.randint(0, 59))
-            candidate = rng.choice(customer_ids)
+            candidate = rng.choice(eligible)
             if rng.random() < 0.7:
-                fresh = [cid for cid in customer_ids if (day - customer_created[cid]).days <= 120]
+                fresh = [cid for cid in eligible if (day - customer_created[cid]).days <= 120]
                 if fresh:
                     candidate = rng.choice(fresh)
+            # Never place an order before the customer's account existed.
+            placed_at = max(placed_at, customer_created_dt[candidate] + timedelta(minutes=1))
 
             region = db.query(Customer.region).filter(Customer.id == candidate).scalar()
             channel = rng.choices(*zip(*CHANNEL_WEIGHTS))[0]

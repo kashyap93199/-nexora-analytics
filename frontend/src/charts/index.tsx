@@ -78,14 +78,12 @@ export function LineAreaChart({
   series,
   currency,
   height = 280,
-  showLegend = false,
 }: {
   data: Record<string, unknown>[];
   xKey: string;
   series: { key: string; name: string; color: string; type?: "line" | "area" }[];
   currency?: string;
   height?: number;
-  showLegend?: boolean;
 }) {
   const t = useChartTheme();
   const tooltip = (props: unknown) => <ChartTooltip {...(props as object)} currency={currency} />;
@@ -106,7 +104,6 @@ export function LineAreaChart({
         <XAxis dataKey={xKey} tick={{ ...AXIS_TICKS, fill: t.axis }} axisLine={false} tickLine={false} interval="preserveStartEnd" minTickGap={28} />
         <YAxis tick={{ ...AXIS_TICKS, fill: t.axis }} axisLine={false} tickLine={false} width={64} />
         <Tooltip content={tooltip as never} cursor={{ stroke: t.cursor, strokeWidth: 1 }} />
-        {showLegend && <Legend wrapperStyle={{ fontSize: 12 }} />}
         {series.map((s) =>
           s.type === "line" ? (
             <Line key={s.key} type="monotone" dataKey={s.key} name={s.name} stroke={s.color} strokeWidth={2.2} dot={false} activeDot={{ r: 4 }} />
@@ -162,7 +159,7 @@ export function SimpleBarChart({
         <Tooltip content={tooltip as never} cursor={{ fill: t.cursor }} />
         <Legend wrapperStyle={{ fontSize: 12 }} />
         {bars.map((b) => (
-          <Bar key={b.key} dataKey={b.key} name={b.name} stackId={stacked ? "a" : undefined} fill={b.color} radius={stacked && false ? 0 : [4, 4, 0, 0]} barSize={stacked ? undefined : 22} />
+          <Bar key={b.key} dataKey={b.key} name={b.name} stackId={stacked ? "a" : undefined} fill={b.color} radius={[4, 4, 0, 0]} barSize={stacked ? undefined : 22} />
         ))}
       </BarChart>
     </ResponsiveContainer>

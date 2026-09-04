@@ -69,6 +69,9 @@ def mark_read(
     ).first()
     if notification is None:
         raise HTTPException(status_code=404, detail="Notification not found")
+    # Personal notifications can only be toggled by their recipient.
+    if notification.user_id is not None and notification.user_id != member.user_id:
+        raise HTTPException(status_code=404, detail="Notification not found")
     notification.is_read = True
     db.commit()
     return MessageOut(message="Marked as read")
