@@ -2,7 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Design tokens — light theme (default) */
+/* ---------------------------------------------------------------------------
+   Design tokens
+   - Light / dark neutrals live on :root / .dark
+   - Accent palettes are selected with `data-accent="…"` on <html>
+   - "Depth" (3D) styling is enabled with `data-depth="on"` on <html>
+   All values are space-separated RGB triplets so Tailwind's <alpha-value> works.
+--------------------------------------------------------------------------- */
+
 :root {
   --surface: 249 250 251; /* gray-50 page background */
   --card: 255 255 255;
@@ -12,7 +19,6 @@
   color-scheme: light;
 }
 
-/* Dark theme */
 .dark {
   --surface: 10 14 22;
   --card: 15 21 33;
@@ -20,6 +26,99 @@
   --ink: 226 232 240; /* slate-200 */
   --muted: 148 163 184; /* slate-400 */
   color-scheme: dark;
+}
+
+/* Accent palettes ---------------------------------------------------------- */
+
+:root,
+[data-accent="indigo"] {
+  --primary-50: 238 244 255;
+  --primary-100: 220 231 254;
+  --primary-200: 192 211 254;
+  --primary-300: 148 182 252;
+  --primary-400: 98 142 249;
+  --primary-500: 60 102 244;
+  --primary-600: 38 72 233;
+  --primary-700: 29 54 214;
+  --primary-800: 30 47 174;
+  --primary-900: 30 44 137;
+  --primary-950: 23 30 83;
+  --accent-2: 139 92 246;
+}
+
+[data-accent="violet"] {
+  --primary-50: 245 243 255;
+  --primary-100: 237 233 254;
+  --primary-200: 221 214 254;
+  --primary-300: 196 181 253;
+  --primary-400: 167 139 250;
+  --primary-500: 139 92 246;
+  --primary-600: 124 58 237;
+  --primary-700: 109 40 217;
+  --primary-800: 91 33 182;
+  --primary-900: 76 29 149;
+  --primary-950: 46 16 101;
+  --accent-2: 217 70 239;
+}
+
+[data-accent="emerald"] {
+  --primary-50: 236 253 245;
+  --primary-100: 209 250 229;
+  --primary-200: 167 243 208;
+  --primary-300: 110 231 183;
+  --primary-400: 52 211 153;
+  --primary-500: 16 185 129;
+  --primary-600: 5 150 105;
+  --primary-700: 4 120 87;
+  --primary-800: 6 95 70;
+  --primary-900: 6 78 59;
+  --primary-950: 2 44 34;
+  --accent-2: 45 212 191;
+}
+
+[data-accent="rose"] {
+  --primary-50: 255 241 242;
+  --primary-100: 255 228 230;
+  --primary-200: 254 205 211;
+  --primary-300: 253 164 175;
+  --primary-400: 251 113 133;
+  --primary-500: 244 63 94;
+  --primary-600: 225 29 72;
+  --primary-700: 190 18 60;
+  --primary-800: 159 18 57;
+  --primary-900: 136 19 55;
+  --primary-950: 76 5 25;
+  --accent-2: 251 146 60;
+}
+
+[data-accent="amber"] {
+  --primary-50: 255 247 237;
+  --primary-100: 255 237 213;
+  --primary-200: 254 215 170;
+  --primary-300: 253 186 116;
+  --primary-400: 251 146 60;
+  --primary-500: 249 115 22;
+  --primary-600: 234 88 12;
+  --primary-700: 194 65 12;
+  --primary-800: 154 52 18;
+  --primary-900: 124 45 18;
+  --primary-950: 67 20 7;
+  --accent-2: 251 191 36;
+}
+
+[data-accent="ocean"] {
+  --primary-50: 236 254 255;
+  --primary-100: 207 250 254;
+  --primary-200: 165 243 252;
+  --primary-300: 103 232 249;
+  --primary-400: 34 211 238;
+  --primary-500: 6 182 212;
+  --primary-600: 8 145 178;
+  --primary-700: 14 116 144;
+  --primary-800: 21 94 117;
+  --primary-900: 22 78 99;
+  --primary-950: 8 51 68;
+  --accent-2: 59 130 246;
 }
 
 @layer base {
@@ -37,12 +136,12 @@
   }
 
   ::selection {
-    background: rgb(38 72 233 / 0.18);
+    background: rgb(var(--primary-600) / 0.18);
   }
 
   /* Visible, consistent focus states */
   :focus-visible {
-    outline: 2px solid rgb(38 72 233 / 0.7);
+    outline: 2px solid rgb(var(--primary-600) / 0.7);
     outline-offset: 2px;
     border-radius: 4px;
   }
@@ -67,6 +166,192 @@
   .tabular {
     font-variant-numeric: tabular-nums;
   }
+
+  /* Gradient text in the current accent */
+  .text-gradient {
+    background-image: linear-gradient(120deg, rgb(var(--primary-600)), rgb(var(--accent-2)));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Glass surface (used by topbar / floating panels in depth mode) */
+  .glass {
+    background: rgb(var(--card) / 0.72);
+    backdrop-filter: saturate(160%) blur(14px);
+    -webkit-backdrop-filter: saturate(160%) blur(14px);
+  }
+
+  /* Perspective wrapper for tilt cards */
+  .perspective {
+    perspective: 1200px;
+  }
+  .preserve-3d {
+    transform-style: preserve-3d;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Depth ("3D") mode
+   Layered shadows, glossy highlights, subtle gradients and an ambient
+   background. Everything degrades to the flat look when data-depth is absent.
+--------------------------------------------------------------------------- */
+
+[data-depth="on"] body {
+  background-color: rgb(var(--surface));
+  background-image:
+    radial-gradient(1200px 600px at 8% -10%, rgb(var(--primary-500) / 0.14), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, rgb(var(--accent-2) / 0.12), transparent 55%),
+    radial-gradient(700px 500px at 60% 110%, rgb(var(--primary-400) / 0.08), transparent 60%);
+  background-attachment: fixed;
+}
+
+[data-depth="on"].dark body {
+  background-image:
+    radial-gradient(1200px 600px at 8% -10%, rgb(var(--primary-500) / 0.22), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, rgb(var(--accent-2) / 0.16), transparent 55%),
+    radial-gradient(700px 500px at 60% 110%, rgb(var(--primary-400) / 0.1), transparent 60%);
+}
+
+/* Cards: layered elevation + glossy top edge */
+[data-depth="on"] .card-3d {
+  position: relative;
+  border-color: rgb(var(--border) / 0.7);
+  background-image: linear-gradient(180deg, rgb(255 255 255 / 0.65), rgb(255 255 255 / 0) 40%);
+  box-shadow:
+    0 1px 1px rgb(16 24 40 / 0.03),
+    0 2px 4px rgb(16 24 40 / 0.04),
+    0 8px 16px -4px rgb(16 24 40 / 0.08),
+    0 24px 40px -16px rgb(16 24 40 / 0.12),
+    inset 0 1px 0 rgb(255 255 255 / 0.7);
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.35s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.35s;
+}
+[data-depth="on"].dark .card-3d {
+  background-image: linear-gradient(180deg, rgb(255 255 255 / 0.05), rgb(255 255 255 / 0) 45%);
+  box-shadow:
+    0 1px 1px rgb(0 0 0 / 0.2),
+    0 8px 20px -6px rgb(0 0 0 / 0.45),
+    0 28px 48px -20px rgb(0 0 0 / 0.55),
+    inset 0 1px 0 rgb(255 255 255 / 0.06);
+}
+[data-depth="on"] .card-3d.card-3d-hover:hover {
+  transform: translateY(-3px);
+  border-color: rgb(var(--primary-400) / 0.45);
+  box-shadow:
+    0 2px 4px rgb(16 24 40 / 0.04),
+    0 12px 24px -8px rgb(16 24 40 / 0.14),
+    0 40px 64px -24px rgb(var(--primary-600) / 0.28),
+    inset 0 1px 0 rgb(255 255 255 / 0.7);
+}
+[data-depth="on"].dark .card-3d.card-3d-hover:hover {
+  box-shadow:
+    0 2px 4px rgb(0 0 0 / 0.3),
+    0 16px 32px -10px rgb(0 0 0 / 0.5),
+    0 40px 64px -24px rgb(var(--primary-500) / 0.35),
+    inset 0 1px 0 rgb(255 255 255 / 0.08);
+}
+
+/* Accent "hero" stat card: gradient block with light sweep */
+.stat-hero {
+  background-image:
+    radial-gradient(120% 140% at 100% 0%, rgb(255 255 255 / 0.22), transparent 55%),
+    linear-gradient(135deg, rgb(var(--primary-600)), rgb(var(--primary-700)) 55%, rgb(var(--accent-2)) 140%);
+  color: white;
+}
+.stat-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(115deg, transparent 30%, rgb(255 255 255 / 0.18) 50%, transparent 70%);
+  background-size: 250% 100%;
+  animation: shimmer 5s linear infinite;
+  pointer-events: none;
+  border-radius: inherit;
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+[data-depth="on"] .stat-hero::after {
+  opacity: 1;
+}
+
+/* Iconic "coin" for stat icons in depth mode */
+[data-depth="on"] .icon-3d {
+  background-image: linear-gradient(145deg, rgb(var(--primary-400)), rgb(var(--primary-700)));
+  color: white;
+  box-shadow:
+    0 6px 14px -4px rgb(var(--primary-600) / 0.55),
+    inset 0 1px 0 rgb(255 255 255 / 0.45),
+    inset 0 -2px 0 rgb(0 0 0 / 0.15);
+}
+
+/* Sidebar / topbar treatment */
+[data-depth="on"] .sidebar-3d {
+  background: linear-gradient(180deg, rgb(var(--card)), rgb(var(--card) / 0.92));
+  box-shadow: 8px 0 32px -18px rgb(16 24 40 / 0.25);
+}
+[data-depth="on"].dark .sidebar-3d {
+  box-shadow: 8px 0 40px -18px rgb(0 0 0 / 0.7);
+}
+[data-depth="on"] .nav-active-3d {
+  background-image: linear-gradient(135deg, rgb(var(--primary-600)), rgb(var(--primary-500)));
+  color: white !important;
+  box-shadow: 0 8px 18px -8px rgb(var(--primary-600) / 0.7), inset 0 1px 0 rgb(255 255 255 / 0.25);
+}
+[data-depth="on"] .nav-active-3d svg {
+  color: white;
+}
+
+/* Buttons pick up a gradient + glow */
+[data-depth="on"] .btn-3d {
+  background-image: linear-gradient(180deg, rgb(var(--primary-500)), rgb(var(--primary-600)));
+  box-shadow: 0 6px 16px -6px rgb(var(--primary-600) / 0.65), inset 0 1px 0 rgb(255 255 255 / 0.28);
+}
+[data-depth="on"] .btn-3d:hover:not(:disabled) {
+  background-image: linear-gradient(180deg, rgb(var(--primary-400)), rgb(var(--primary-600)));
+  transform: translateY(-1px);
+}
+[data-depth="on"] .btn-3d:active:not(:disabled) {
+  transform: translateY(0);
+}
+[data-depth="on"] .btn-3d:disabled {
+  background-image: none;
+  box-shadow: none;
+}
+
+/* Rank "chips" in lists */
+[data-depth="on"] .chip-3d {
+  background-image: linear-gradient(145deg, rgb(var(--card)), rgb(var(--surface)));
+  box-shadow: 0 2px 6px -1px rgb(16 24 40 / 0.12), inset 0 1px 0 rgb(255 255 255 / 0.6);
+}
+[data-depth="on"].dark .chip-3d {
+  background-image: linear-gradient(145deg, rgb(255 255 255 / 0.08), rgb(255 255 255 / 0.02));
+  box-shadow: 0 2px 6px -1px rgb(0 0 0 / 0.4), inset 0 1px 0 rgb(255 255 255 / 0.08);
+}
+
+/* Progress bars get a glossy fill */
+[data-depth="on"] .bar-3d > div {
+  background-image: linear-gradient(180deg, rgb(255 255 255 / 0.35), rgb(255 255 255 / 0) 55%);
+  box-shadow: 0 2px 6px -1px rgb(var(--primary-600) / 0.45);
+}
+
+/* Floating decorative orbs (overview header) */
+.orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(2px);
+  pointer-events: none;
+  background: radial-gradient(circle at 30% 30%, rgb(255 255 255 / 0.85), rgb(var(--primary-300) / 0.55) 35%, rgb(var(--primary-600) / 0.3) 70%, transparent 72%);
+  box-shadow: inset -10px -14px 30px rgb(var(--primary-700) / 0.35), 0 20px 40px -20px rgb(var(--primary-700) / 0.5);
+}
+
+/* Keyframes referenced from plain CSS (Tailwind only emits keyframes for used animate-* classes) */
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to { background-position: 200% 0; }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
 }
 
 /* Respect reduced motion */
@@ -77,5 +362,8 @@
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+  [data-depth="on"] .card-3d.card-3d-hover:hover {
+    transform: none;
   }
 }

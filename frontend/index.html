@@ -10,12 +10,16 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <script>
-      // Apply saved theme before paint to avoid flashes.
+      // Apply saved theme, accent palette and depth mode before paint to avoid flashes.
       try {
         var t = localStorage.getItem("nexora-theme");
-        if (t === "dark" || (!t && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
+        if (t === "dark" || ((!t || t === "system") && window.matchMedia("(prefers-color-scheme: dark)").matches)) {
           document.documentElement.classList.add("dark");
         }
+        var a = localStorage.getItem("nexora-accent");
+        var accents = ["indigo", "violet", "emerald", "rose", "amber", "ocean"];
+        document.documentElement.dataset.accent = accents.indexOf(a) >= 0 ? a : "indigo";
+        document.documentElement.dataset.depth = localStorage.getItem("nexora-depth") === "off" ? "off" : "on";
       } catch (e) {}
     </script>
   </head>

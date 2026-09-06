@@ -105,7 +105,7 @@ export default function CustomersPage() {
       {/* Metric tiles */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
         {metricTiles.map((m) => (
-          <div key={m.label} className="rounded-xl border border-border bg-card p-4">
+          <div key={m.label} className="card-3d rounded-xl border border-border bg-card p-4">
             <p className="text-xs text-muted">{m.label}</p>
             <p className="mt-1 truncate text-lg font-bold text-ink tabular">{m.value}</p>
           </div>

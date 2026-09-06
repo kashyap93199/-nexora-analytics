@@ -5,7 +5,7 @@ export function LogoMark({ className }: { className?: string }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center justify-center rounded-lg bg-primary-600 text-white shadow-sm",
+        "icon-3d inline-flex items-center justify-center rounded-lg bg-primary-600 text-white shadow-sm",
         className ?? "h-8 w-8"
       )}
       aria-hidden
@@ -23,7 +23,7 @@ export function Logo({ dark = false, to = "/" }: { dark?: boolean; to?: string }
       <LogoMark className="h-8 w-8" />
       <span className="flex flex-col leading-none">
         <span className={cn("text-[17px] font-bold tracking-tight", dark ? "text-white" : "text-ink")}>
-          Nexora<span className="text-primary-600"> Analytics</span>
+          Nexora<span className="text-gradient"> Analytics</span>
         </span>
         {!dark && <span className="mt-0.5 text-[10px] font-medium uppercase tracking-widest text-muted">Business insights</span>}
       </span>

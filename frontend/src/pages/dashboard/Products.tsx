@@ -132,19 +132,19 @@ export default function ProductsPage() {
 
       {/* Summary tiles */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <div className="rounded-xl border border-border bg-card p-4">
+        <div className="card-3d rounded-xl border border-border bg-card p-4">
           <p className="text-xs text-muted">Products in catalog</p>
           <p className="mt-1 text-xl font-bold text-ink tabular">{formatNumber(catalog.data?.total ?? 0)}</p>
         </div>
-        <div className="rounded-xl border border-border bg-card p-4">
+        <div className="card-3d rounded-xl border border-border bg-card p-4">
           <p className="text-xs text-muted">Units sold (period)</p>
           <p className="mt-1 text-xl font-bold text-ink tabular">{formatNumber(totalUnits)}</p>
         </div>
-        <div className="rounded-xl border border-border bg-card p-4">
+        <div className="card-3d rounded-xl border border-border bg-card p-4">
           <p className="text-xs text-muted">Revenue (period)</p>
           <p className="mt-1 text-xl font-bold text-ink tabular">{fc(totalRevenue, currency)}</p>
         </div>
-        <div className={cn("rounded-xl border p-4", lowStock > 0 ? "border-amber-300/60 bg-amber-50/60 dark:border-amber-500/30 dark:bg-amber-500/5" : "border-border bg-card")}>
+        <div className={cn("card-3d rounded-xl border p-4", lowStock > 0 ? "border-amber-300/60 bg-amber-50/60 dark:border-amber-500/30 dark:bg-amber-500/5" : "border-border bg-card")}>
           <p className="flex items-center gap-1.5 text-xs text-muted"><AlertTriangle className="h-3.5 w-3.5 text-amber-500" /> Low stock on this page (&le;{lowStockThreshold})</p>
           <p className="mt-1 text-xl font-bold text-ink tabular">{lowStock}</p>
         </div>

@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { KeyRound, Monitor, Moon, ScrollText, Sun, UserRound } from "lucide-react";
+import { AccentSwatches, DepthToggle } from "../../components/layout/AppearancePicker";
+import { ACCENT_META } from "../../contexts/ThemeContext";
 import { useAuth } from "../../contexts/AuthContext";
 import { useApi } from "../../hooks/useApi";
 import { useDocumentTitle } from "../../hooks/useUi";
@@ -21,7 +23,7 @@ import { Pagination } from "../../components/ui/Pagination";
 export default function SettingsPage() {
   useDocumentTitle("Settings");
   const { me, refreshMe } = useAuth();
-  const { theme, preference, setPreference } = useTheme();
+  const { theme, preference, setPreference, accent } = useTheme();
   const toast = useToast();
   const isOwner = me?.role === "owner";
   const canManageOrg = me?.permissions.includes(PERMISSIONS.orgManage) ?? false;
@@ -150,7 +152,14 @@ export default function SettingsPage() {
                 <span className="ml-auto text-xs text-muted">{theme === opt.value && "active"}</span>
               </button>
             ))}
-            <p className="pt-2 text-xs text-muted">Persisted on this device; charts adapt to both themes.</p>
+            <div className="pt-3">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-muted">Accent colour · {ACCENT_META[accent].label}</p>
+              <AccentSwatches />
+            </div>
+            <div className="pt-3">
+              <DepthToggle />
+            </div>
+            <p className="pt-2 text-xs text-muted">Persisted on this device; charts and the sidebar follow your accent and theme.</p>
           </CardBody>
         </Card>
       </div>

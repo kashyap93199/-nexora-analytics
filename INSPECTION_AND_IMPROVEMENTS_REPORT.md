@@ -150,7 +150,7 @@ API additions are backwards-compatible: existing response fields are unchanged; 
 | Runtime QA journeys | `PYTHONPATH=. .venv/bin/python scripts/audit_runtime.py` | **37/37 checks passed** |
 | Smoke test (seeded DB) | `.venv/bin/python scripts/smoke_test.py` | ✅ all steps |
 | Frontend type-check | `npx tsc --noEmit` | clean |
-| Frontend unit tests | `npx vitest run` | **36 passed** (24 pre-existing + 12 new) |
+| Frontend unit tests | `npx vitest run` | **36 passed** (24 pre-existing + 12 new) — now **48** after the theme refresh, see §9 |
 | Production build | `npm run build` | ✅ (largest chunk 436 kB / 117 kB gzip — unchanged) |
 | Live E2E (uvicorn + Vite proxy, seeded DB) | manual `curl` flows | login → `/auth/me` with workspaces → invite existing user to 2nd org → switch → analyst 403 on write → notification delivered → illegal order transition 409 → CSV export with headers → export audit entry ✓; legacy DB auto-migrated (`low_stock_threshold`, new indexes) |
 
@@ -204,3 +204,44 @@ npm run typecheck && npm run test && npm run build
 # Docker
 cp .env.example .env && docker compose up --build   # http://localhost:3000
 ```
+
+---
+
+## 9. Follow-up: accent themes & 3D depth design (dashboard visual refresh)
+
+Requested after the audit: *"implement some theme colour and 3D design for an attractive dashboard"*. Everything is opt-out, persisted per device and degrades to the previous flat look.
+
+### 9.1 What was added
+
+| Area | Change |
+| --- | --- |
+| **Colour system** | `primary.*` in Tailwind now resolves to CSS variables (`rgb(var(--primary-600) / <alpha>)`), so every existing `bg-primary-600`, `text-primary-*`, `ring-primary-*` follows the active accent with no per-component edits. Six palettes (50–950 scales + a secondary `--accent-2` glow colour) are defined under `[data-accent="…"]` in `src/index.css`: **Indigo** (default, identical to the old blue), **Violet**, **Emerald**, **Rose**, **Sunset** (amber/orange), **Ocean**. |
+| **Theme context** | `ThemeContext` gained `accent / setAccent / depth / setDepth` (+ `useThemeOptional`, `ACCENTS`, `ACCENT_META`, `isAccent`). Keys: `nexora-theme`, `nexora-accent`, `nexora-depth`. `index.html` applies `.dark`, `data-accent` and `data-depth` before first paint (no flash). While fixing this, a latent bug was found: in *system* mode the OS light↔dark switch never re-rendered because the listener set the same `"system"` state (React bails out). System dark-ness is now tracked as its own state and covered by a test. |
+| **Appearance picker** | New `AppearancePicker` (topbar palette icon, `role="dialog"` popover): light/dark/auto tabs, accent swatches (`radiogroup`), 3D-depth switch. `AccentSwatches` + `DepthToggle` are reused on Settings → Appearance. |
+| **3D depth mode** (`data-depth="on"`, default on) | Ambient radial background wash, layered `card-3d` elevation with glossy top edge and accent-tinted hover lift (`card-3d-hover`), gradient **hero KPI card** with light sweep, "coin" stat icons, gradient active nav item + sidebar shadow, glass topbar, gradient/glow primary buttons (`btn-3d`), glossy progress bars (`bar-3d`), 3D rank chips (`chip-3d`), and a **Welcome banner** on Overview with floating orbs and a perspective grid. |
+| **Motion** | `useTilt` hook: pointer-tracking `rotateX/rotateY` tilt + radial highlight (`--mx/--my`) on stat cards; disabled when depth is off, when `prefers-reduced-motion` is set, or on coarse pointers. Staggered `rise-in` entrance for KPI cards (`index` prop). A global reduced-motion block neutralises all animations/transitions. |
+| **Charts** | `useAccentColors()` reads the live palette from CSS variables; `CHART_COLORS.blue/violet` act as sentinels swapped for the accent by `useResolveColor()`, so existing chart call-sites recolour automatically. `useChartPalette()` gives an accent-led donut/legend palette. In depth mode, lines/areas/bars/donuts get SVG drop-shadow glow filters, gradient bar fills and rounded donut segments; tooltips use the glass style. |
+| **StatCard** | Rewritten: `variant="hero"`, `sparkline` (inline SVG trend, exported `Sparkline`), `index` stagger, tilt + highlight. Overview passes 7-day revenue/orders/customer sparklines from the existing series data. |
+| **Other UI** | `Card` gained `hover`; `Logo` uses a gradient wordmark; `Dropdown` accepts a `role`; tiles on Products / Customers / Sales / Analytics / Customer detail get the same elevation treatment. |
+
+### 9.2 Files
+
+New: `frontend/src/components/layout/AppearancePicker.tsx`, `frontend/src/components/dashboard/WelcomeBanner.tsx`, `frontend/src/hooks/useTilt.ts`, `frontend/src/contexts/__tests__/ThemeContext.test.tsx`.
+Modified: `frontend/index.html`, `tailwind.config.ts`, `src/index.css`, `src/contexts/ThemeContext.tsx`, `src/charts/{index,ChartCard}.tsx`, `src/components/dashboard/StatCard.tsx`, `src/components/layout/{DashboardLayout,Logo}.tsx`, `src/components/ui/{Card,Button,base,Dropdown}.tsx`, `src/pages/dashboard/{Overview,Settings,Products,Customers,Sales,Analytics,CustomerDetail}.tsx`, `src/components/__tests__/ui.test.tsx`, `README.md`.
+
+### 9.3 Verification
+
+| Check | Result |
+| --- | --- |
+| `npx tsc --noEmit` | clean |
+| `npx vitest run` | **48 passed** (36 previous + 12 new: accent/depth defaults, persistence, invalid-storage fallback, picker interaction, OS colour-scheme change ×2, StatCard hero/sparkline/stagger, sparkline gating, tilt on/off, `Sparkline` geometry ×2) |
+| `npm run build` | ✅ — CSS 60.7 kB (11.2 kB gzip); all new utilities (`shadow-depth*`, `animate-rise-in/float`, `ease-spring`, arbitrary `[.card-3d:hover_&]` variants) emitted |
+| Dev-server CSS | confirmed `.bg-primary-600 { background-color: rgb(var(--primary-600) / …) }` is what ships (a stale Tailwind config cache in the running Vite process had to be cleared with `--force`) |
+
+Limitation: this sandbox has no browser binary (Chromium download is blocked), so the refresh was verified through the compiled CSS, unit tests and code review rather than screenshots — please eyeball the live preview in light + dark, and with depth off, once.
+
+### 9.4 Notes for maintainers
+
+- Adding a palette = one `[data-accent="name"]` block in `index.css` + an entry in `ACCENTS` / `ACCENT_META`.
+- Anything that should lift in depth mode: add `card-3d card-3d-hover` (or use `<Card hover>`). Anything decorative should be `aria-hidden`.
+- Depth mode is CSS-only apart from the tilt hook; turning it off (`nexora-depth=off`) restores the exact pre-refresh flat design.

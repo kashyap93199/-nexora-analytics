@@ -8,12 +8,15 @@ export function Dropdown({
   align = "right",
   className,
   width = "w-56",
+  role = "menu",
 }: {
   trigger: (open: boolean) => ReactNode;
   children: ReactNode | ((close: () => void) => ReactNode);
   align?: "left" | "right";
   className?: string;
   width?: string;
+  /** ARIA role of the popover — use `dialog` when the content is not a list of menu items. */
+  role?: "menu" | "dialog";
 }) {
   const [open, setOpen] = useState(false);
   const ref = useClickOutside(() => setOpen(false));
@@ -31,7 +34,7 @@ export function Dropdown({
             width,
             className
           )}
-          role="menu"
+          role={role}
         >
           {typeof children === "function" ? children(() => setOpen(false)) : children}
         </div>

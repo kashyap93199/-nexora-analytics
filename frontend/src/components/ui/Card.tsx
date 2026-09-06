@@ -3,12 +3,14 @@ import { cn } from "../../lib/utils";
 
 interface CardProps extends HTMLAttributes<HTMLDivElement> {
   children: ReactNode;
+  /** Lift the card slightly on hover (only visible in 3D depth mode). */
+  hover?: boolean;
 }
 
-export function Card({ className, children, ...props }: CardProps) {
+export function Card({ className, children, hover = false, ...props }: CardProps) {
   return (
     <div
-      className={cn("rounded-xl border border-border bg-card shadow-card", className)}
+      className={cn("card-3d rounded-xl border border-border bg-card shadow-card", hover && "card-3d-hover", className)}
       {...props}
     >
       {children}

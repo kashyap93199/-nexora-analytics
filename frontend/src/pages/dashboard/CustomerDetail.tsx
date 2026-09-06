@@ -92,7 +92,7 @@ export default function CustomerDetailPage() {
         </Card>
         <div className="grid grid-cols-2 gap-4 lg:col-span-2">
           {stats.map((s) => (
-            <div key={s.label} className="rounded-xl border border-border bg-card p-4">
+            <div key={s.label} className="card-3d rounded-xl border border-border bg-card p-4">
               <p className="text-xs text-muted">{s.label}</p>
               <p className="mt-1 truncate text-xl font-bold text-ink tabular">{s.value}</p>
             </div>

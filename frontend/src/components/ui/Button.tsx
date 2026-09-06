@@ -14,7 +14,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const VARIANTS: Record<Variant, string> = {
   primary:
-    "bg-primary-600 text-white hover:bg-primary-700 active:bg-primary-800 disabled:bg-primary-300 dark:disabled:bg-primary-900 disabled:text-white/80 shadow-sm",
+    "btn-3d bg-primary-600 text-white hover:bg-primary-700 active:bg-primary-800 disabled:bg-primary-300 dark:disabled:bg-primary-900 disabled:text-white/80 shadow-sm",
   secondary:
     "bg-ink/[0.05] text-ink hover:bg-ink/[0.09] dark:bg-white/[0.08] dark:hover:bg-white/[0.14] disabled:opacity-50",
   outline:
@@ -40,7 +40,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       ref={ref}
       disabled={disabled || loading}
       className={cn(
-        "inline-flex select-none items-center justify-center font-medium transition-colors duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 disabled:cursor-not-allowed",
+        "inline-flex select-none items-center justify-center font-medium transition-[color,background-color,border-color,transform,box-shadow] duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-500 disabled:cursor-not-allowed",
         VARIANTS[variant],
         variant !== "link" && SIZES[size],
         className

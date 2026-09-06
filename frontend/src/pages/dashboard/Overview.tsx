@@ -10,11 +10,12 @@ import type { Goal, Interval, OverviewResponse, SeriesPoint } from "../../types"
 import { Card, CardBody, CardHeader } from "../../components/ui/Card";
 import { EmptyState, ErrorState, Skeleton, SkeletonRows } from "../../components/ui/Feedback";
 import { Segmented } from "../../components/ui/Tabs";
-import { ProgressBar, PageHeader } from "../../components/ui/base";
+import { ProgressBar } from "../../components/ui/base";
 import { StatCard } from "../../components/dashboard/StatCard";
+import { WelcomeBanner } from "../../components/dashboard/WelcomeBanner";
 import { OrderStatusBadge } from "../../components/ui/Badge";
 import { ChartCard } from "../../charts/ChartCard";
-import { CHART_COLORS, DonutChart, LineAreaChart, SimpleBarChart } from "../../charts/index";
+import { CHART_COLORS, DonutChart, LineAreaChart, SimpleBarChart, useChartPalette } from "../../charts/index";
 
 
 export default function OverviewPage() {
@@ -44,21 +45,30 @@ export default function OverviewPage() {
 
   const revenuePoints = (useBundledSeries ? data?.revenue_series.points : interactiveRevenue.data?.points) ?? [];
   const customerPoints = data?.customer_series.points ?? [];
+  const bundledRevenue = data?.revenue_series.points ?? [];
+  const revenueSpark = bundledRevenue.map((p) => p.value ?? 0);
+  const ordersSpark = bundledRevenue.map((p) => p.count ?? 0);
+  const customersSpark = customerPoints.map((p) => p.new ?? 0);
+  const salesPoints = data?.sales_series.points ?? [];
+  const conversionSpark = salesPoints.map((p) => (p.visitors ? ((p.conversions ?? 0) / p.visitors) * 100 : 0));
+  const aovSpark = bundledRevenue.map((p) => (p.count ? (p.value ?? 0) / p.count : 0));
+  const palette = useChartPalette();
 
   return (
     <div className="space-y-6">
-      <PageHeader
+      <WelcomeBanner
         title={`Welcome back, ${me?.user.full_name.split(" ")[0] ?? "there"}`}
         description={`Here's how ${me?.organization.name} is performing ${range.label.toLowerCase()}.`}
+        stat={!loading && kpis ? { label: "Revenue", value: fc(kpis.revenue, currency, kpis.revenue >= 100000) } : undefined}
       />
 
       {/* KPI cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <StatCard label="Revenue" value={kpis?.revenue ?? 0} delta={kpis?.revenue_change} currency={currency} loading={loading} icon={<DollarSign className="h-4 w-4" />} />
-        <StatCard label="Orders" value={kpis?.orders ?? 0} kind="number" delta={kpis?.orders_change} loading={loading} icon={<ShoppingBag className="h-4 w-4" />} />
-        <StatCard label="Customers" value={kpis?.total_customers ?? 0} kind="number" delta={kpis?.customers_change} loading={loading} icon={<Users className="h-4 w-4" />} hint={`${formatNumber(kpis?.new_customers ?? 0)} new in period`} />
-        <StatCard label="Conversion rate" value={kpis?.conversion_rate ?? 0} kind="percent" delta={kpis?.conversion_change} deltaSuffix=" pts" loading={loading} icon={<TrendingUp className="h-4 w-4" />} />
-        <StatCard label="Avg. order value" value={kpis?.aov ?? 0} delta={kpis?.aov_change} currency={currency} loading={loading} icon={<Target className="h-4 w-4" />} />
+        <StatCard index={0} variant="hero" label="Revenue" value={kpis?.revenue ?? 0} delta={kpis?.revenue_change} currency={currency} loading={loading} icon={<DollarSign className="h-4 w-4" />} sparkline={revenueSpark} />
+        <StatCard index={1} label="Orders" value={kpis?.orders ?? 0} kind="number" delta={kpis?.orders_change} loading={loading} icon={<ShoppingBag className="h-4 w-4" />} sparkline={ordersSpark} />
+        <StatCard index={2} label="Customers" value={kpis?.total_customers ?? 0} kind="number" delta={kpis?.customers_change} loading={loading} icon={<Users className="h-4 w-4" />} hint={`${formatNumber(kpis?.new_customers ?? 0)} new in period`} sparkline={customersSpark} />
+        <StatCard index={3} label="Conversion rate" value={kpis?.conversion_rate ?? 0} kind="percent" delta={kpis?.conversion_change} deltaSuffix=" pts" loading={loading} icon={<TrendingUp className="h-4 w-4" />} sparkline={conversionSpark} />
+        <StatCard index={4} label="Avg. order value" value={kpis?.aov ?? 0} delta={kpis?.aov_change} currency={currency} loading={loading} icon={<Target className="h-4 w-4" />} sparkline={aovSpark} />
       </div>
 
       {/* Revenue + category donut */}
@@ -104,7 +114,7 @@ export default function OverviewPage() {
                 {data.revenue_by_category.slice(0, 5).map((c, i) => (
                   <li key={c.name} className="flex items-center justify-between gap-4 text-xs">
                     <span className="flex items-center gap-2 text-muted">
-                      <span className="h-2 w-2 rounded-full" style={{ background: ["#2648e9", "#0ea5a4", "#8b5cf6", "#f59e0b", "#ef4444"][i] }} />
+                      <span className="h-2 w-2 rounded-full shadow-sm" style={{ background: palette[i % palette.length] }} />
                       {c.name}
                     </span>
                     <span className="font-semibold text-ink tabular">{fc(c.value, currency, true)}</span>
@@ -150,7 +160,7 @@ export default function OverviewPage() {
 
       {/* Top products + goals */}
       <div className="grid gap-5 xl:grid-cols-3">
-        <Card className="xl:col-span-2">
+        <Card className="xl:col-span-2" hover>
           <CardHeader
             title="Top products"
             subtitle="Best performers in the selected period"
@@ -165,8 +175,8 @@ export default function OverviewPage() {
               <div className="p-5"><SkeletonRows rows={4} /></div>
             ) : data && data.top_products.length > 0 ? (
               data.top_products.map((p, i) => (
-                <div key={p.id} className="flex items-center gap-4 px-5 py-3.5">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-ink/[0.04] text-xs font-bold text-muted dark:bg-white/[0.06]">{i + 1}</span>
+                <div key={p.id} className="flex items-center gap-4 px-5 py-3.5 transition-colors hover:bg-primary-50/40 dark:hover:bg-primary-500/5">
+                  <span className={cn("chip-3d flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold", i === 0 ? "bg-primary-600 text-white" : "bg-ink/[0.04] text-muted dark:bg-white/[0.06]")}>{i + 1}</span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold text-ink">{p.name}</p>
                     <p className="text-xs text-muted">{p.category ?? "Uncategorized"}</p>
@@ -194,7 +204,7 @@ export default function OverviewPage() {
       </div>
 
       {/* Recent orders */}
-      <Card>
+      <Card hover>
         <CardHeader
           title="Recent orders"
           subtitle="Latest activity across your store"
@@ -246,7 +256,7 @@ export function GoalsPanel() {
   const currency = me?.organization.currency ?? "USD";
 
   return (
-    <Card>
+    <Card hover>
       <CardHeader
         title="Goals"
         subtitle="Live progress this period"

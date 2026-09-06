@@ -27,7 +27,7 @@ import { useToast } from "../../contexts/ToastContext";
 import { apiErrorMessage } from "../../lib/utils";
 import { PERMISSIONS } from "../../types";
 import { Logo } from "./Logo";
-import { ThemeToggle } from "./ThemeToggle";
+import { AppearancePicker } from "./AppearancePicker";
 import { Dropdown, MenuItem } from "../ui/Dropdown";
 import { Avatar } from "../ui/base";
 import { NotificationBell } from "./NotificationBell";
@@ -117,7 +117,7 @@ export function DashboardLayout() {
 
 
   const sidebar = (
-    <div className="flex h-full w-64 flex-col border-r border-border bg-card">
+    <div className="sidebar-3d flex h-full w-64 flex-col border-r border-border bg-card">
       <div className="flex h-16 items-center justify-between px-5">
         <Logo to="/app/overview" />
         <button className="rounded-lg p-1.5 text-muted hover:text-ink lg:hidden" onClick={() => setSidebarOpen(false)} aria-label="Close sidebar">
@@ -135,10 +135,10 @@ export function DashboardLayout() {
                     to={item.to}
                     className={({ isActive }) =>
                       cn(
-                        "flex items-center gap-3 rounded-lg px-3 py-2 text-[13.5px] font-medium transition",
+                        "group flex items-center gap-3 rounded-lg px-3 py-2 text-[13.5px] font-medium transition-all duration-200",
                         isActive
-                          ? "bg-primary-50 text-primary-700 dark:bg-primary-500/10 dark:text-primary-400"
-                          : "text-muted hover:bg-ink/[0.04] hover:text-ink dark:hover:bg-white/[0.06]"
+                          ? "nav-active-3d bg-primary-50 text-primary-700 dark:bg-primary-500/10 dark:text-primary-400"
+                          : "text-muted hover:translate-x-0.5 hover:bg-ink/[0.04] hover:text-ink dark:hover:bg-white/[0.06]"
                       )
                     }
                   >
@@ -183,7 +183,7 @@ export function DashboardLayout() {
 
       <div className="lg:pl-64">
         {/* Topbar */}
-        <header className="sticky top-0 z-20 flex h-16 items-center gap-2 border-b border-border bg-card/85 px-4 backdrop-blur sm:px-6">
+        <header className="glass sticky top-0 z-20 flex h-16 items-center gap-2 border-b border-border/70 px-4 sm:px-6">
           <button className="rounded-lg p-2 text-muted hover:text-ink lg:hidden" onClick={() => setSidebarOpen(true)} aria-label="Open sidebar">
             <Menu className="h-5 w-5" />
           </button>
@@ -200,7 +200,7 @@ export function DashboardLayout() {
           <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
             <DateRangePicker />
             <NotificationBell />
-            <ThemeToggle compact />
+            <AppearancePicker compact />
             <button
               onClick={() => setHelpOpen(true)}
               className="hidden h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted transition hover:text-ink sm:inline-flex dark:hover:bg-white/[0.06]"

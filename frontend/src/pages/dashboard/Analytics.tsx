@@ -101,7 +101,7 @@ export default function AnalyticsPage() {
       {/* Sales metric tiles */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
         {metricTiles.map((m) => (
-          <div key={m.label} className="rounded-xl border border-border bg-card p-4">
+          <div key={m.label} className="card-3d rounded-xl border border-border bg-card p-4">
             <p className="text-xs text-muted">{m.label}</p>
             <p className="mt-1 truncate text-lg font-bold text-ink tabular">{m.value}</p>
           </div>
@@ -174,7 +174,7 @@ export default function AnalyticsPage() {
         </ChartCard>
 
         <div className="space-y-5">
-          <div className="rounded-xl border border-border bg-card">
+          <div className="card-3d rounded-xl border border-border bg-card">
             <div className="border-b border-border px-5 py-3.5"><h3 className="text-sm font-semibold text-ink">Customer metrics</h3></div>
             <div className="grid grid-cols-2 gap-px bg-border/60">
               {cmTiles.map((m) => (

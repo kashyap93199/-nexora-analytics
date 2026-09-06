@@ -78,13 +78,13 @@ export function ProgressBar({
     tone ?? (value >= 100 ? "green" : value >= 60 ? "blue" : value >= 30 ? "amber" : "red");
   const tones = {
     auto: "",
-    blue: "bg-blue-500",
+    blue: "bg-primary-500",
     green: "bg-emerald-500",
     red: "bg-red-500",
     amber: "bg-amber-500",
   };
   return (
-    <div className={cn("h-1.5 w-full overflow-hidden rounded-full bg-ink/[0.07] dark:bg-white/[0.08]", className)} role="progressbar" aria-valuenow={Math.round(value)} aria-valuemin={0} aria-valuemax={100}>
+    <div className={cn("bar-3d h-1.5 w-full overflow-hidden rounded-full bg-ink/[0.07] dark:bg-white/[0.08]", className)} role="progressbar" aria-valuenow={Math.round(value)} aria-valuemin={0} aria-valuemax={100}>
       <div className={cn("h-full rounded-full transition-all duration-700", tones[resolvedTone])} style={{ width: `${pct}%` }} />
     </div>
   );

@@ -20,7 +20,7 @@ export function ChartCard({
   className?: string;
 }) {
   return (
-    <Card className={className}>
+    <Card className={className} hover>
       <CardHeader title={title} subtitle={subtitle} actions={actions} />
       <div className="px-2 pb-3 pt-2 sm:px-3" style={{ height: loading ? height : undefined }}>
         {loading ? (

@@ -149,7 +149,7 @@ export default function SalesPage() {
           {/* Metric tiles */}
           <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-7">
             {tiles.map((tile) => (
-              <div key={tile.label} className="rounded-xl border border-border bg-card p-4">
+              <div key={tile.label} className="card-3d rounded-xl border border-border bg-card p-4">
                 <p className="text-xs text-muted">{tile.label}</p>
                 <p className="mt-1 truncate text-lg font-bold text-ink tabular">{tile.value}</p>
                 {tile.sub && <p className="truncate text-[11px] text-muted/80">{tile.sub}</p>}

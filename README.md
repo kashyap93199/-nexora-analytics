@@ -66,7 +66,8 @@ need one place to understand **revenue, orders, customers, products and performa
 - **Team**: invite (shareable link), re-send/rotate invites, roles with owner-safety rails, activity, removal
 - **Multi-workspace accounts**: a user invited to several organizations can switch between them from the account menu
 - **Notifications**, **global search (⌘K)**, **settings** (currency, configurable low-stock threshold), **audit logs** (owner, filterable by action / resource / date)
-- **Dark mode** (light / dark / system, persisted) and **responsive layouts** (375px → 4K)
+- **Appearance**: light / dark / system mode, **six accent palettes** (Indigo, Violet, Emerald, Rose, Sunset, Ocean) that recolour every button, chart, sidebar and progress bar, and a **3D depth mode** (layered shadows, gradient hero KPI, pointer-tracking card tilt, glowing charts, floating welcome banner) — all persisted per device and switchable from the palette icon in the topbar or in Settings → Appearance. Depth mode honours `prefers-reduced-motion`, skips tilt on touch devices and can be turned off for a flat look.
+- **Responsive layouts** (375px → 4K)
 - Loading skeletons, empty states, error states, toasts, confirmation dialogs everywhere
 
 ## 🧰 Tech stack
