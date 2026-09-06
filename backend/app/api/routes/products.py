@@ -1,11 +1,11 @@
 """Product and category CRUD endpoints (organization-scoped)."""
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import pagination_params, require_permission
-from app.auth.permissions import P_PRODUCTS_MANAGE, P_PRODUCTS_VIEW
+from app.auth.permissions import P_PRODUCTS_MANAGE, P_PRODUCTS_VIEW, P_SALES_EXPORT
 from app.database.db import get_db
 from app.models import Category, OrganizationMember, Product
 from app.schemas.catalog import (
@@ -18,6 +18,8 @@ from app.schemas.catalog import (
 )
 from app.schemas.common import MessageOut, Page
 from app.utils.audit import write_audit
+from app.utils.csv_export import csv_response
+from app.utils.query import icontains
 
 router = APIRouter(prefix="/products", tags=["products"])
 categories_router = APIRouter(prefix="/categories", tags=["categories"])
@@ -41,6 +43,58 @@ def _to_out(product: Product) -> ProductOut:
     return out
 
 
+def _assert_sku_available(db: Session, org_id: int, sku: str, exclude_id: int | None = None) -> None:
+    """SKUs identify products within an organization; reject duplicates early (409)."""
+    query = db.query(Product.id).filter(Product.organization_id == org_id, func.lower(Product.sku) == sku.lower())
+    if exclude_id is not None:
+        query = query.filter(Product.id != exclude_id)
+    if query.first() is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"A product with SKU '{sku}' already exists")
+
+
+def _assert_category_in_org(db: Session, org_id: int, category_id: int) -> Category:
+    category = db.get(Category, category_id)
+    if category is None or category.organization_id != org_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Category not found in your organization")
+    return category
+
+
+@router.get("/export")
+def export_products(
+    search: str | None = Query(None, max_length=120),
+    category_id: int | None = Query(None),
+    status_filter: str | None = Query(None, alias="status", pattern="^(active|draft|archived)$"),
+    member: OrganizationMember = Depends(require_permission(P_SALES_EXPORT)),
+    db: Session = Depends(get_db),
+):
+    """Download the catalog (with inventory value) as CSV."""
+    query = db.query(Product).options(joinedload(Product.category)).filter(Product.organization_id == member.organization_id)
+    if search:
+        query = query.filter(or_(icontains(Product.name, search), icontains(Product.sku, search)))
+    if category_id:
+        query = query.filter(Product.category_id == category_id)
+    if status_filter:
+        query = query.filter(Product.status == status_filter)
+    products = query.order_by(Product.name.asc(), Product.id.asc()).limit(10_000).all()
+    rows = [
+        {
+            "SKU": p.sku,
+            "Product": p.name,
+            "Category": p.category.name if p.category else "",
+            "Status": p.status,
+            "Price": float(p.price),
+            "Cost": float(p.cost),
+            "Margin %": round((float(p.price) - float(p.cost)) / float(p.price) * 100, 1) if float(p.price) else 0.0,
+            "Stock": p.stock,
+            "Inventory value": round(float(p.cost) * p.stock, 2),
+        }
+        for p in products
+    ]
+    fieldnames = ["SKU", "Product", "Category", "Status", "Price", "Cost", "Margin %", "Stock", "Inventory value"]
+    write_audit(db, member.organization_id, member.user_id, "products.exported", "product", None, {"rows": len(rows)})
+    return csv_response(rows, fieldnames, "products")
+
+
 @router.get("", response_model=Page[ProductOut])
 def list_products(
     search: str | None = Query(None, max_length=120),
@@ -55,8 +109,7 @@ def list_products(
     page, page_size = pagination
     query = db.query(Product).options(joinedload(Product.category)).filter(Product.organization_id == member.organization_id)
     if search:
-        like = f"%{search}%"
-        query = query.filter(or_(Product.name.ilike(like), Product.sku.ilike(like)))
+        query = query.filter(or_(icontains(Product.name, search), icontains(Product.sku, search)))
     if category_id:
         query = query.filter(Product.category_id == category_id)
     if status_filter:
@@ -64,7 +117,7 @@ def list_products(
 
     total = query.count()
     sort_col = getattr(Product, sort)
-    query = query.order_by(sort_col.desc() if order == "desc" else sort_col.asc())
+    query = query.order_by(sort_col.desc() if order == "desc" else sort_col.asc(), Product.id.asc())
     items = query.offset((page - 1) * page_size).limit(page_size).all()
 
     return Page(
@@ -83,9 +136,8 @@ def create_product(
     db: Session = Depends(get_db),
 ) -> ProductOut:
     if payload.category_id:
-        category = db.get(Category, payload.category_id)
-        if category is None or category.organization_id != member.organization_id:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Category not found in your organization")
+        _assert_category_in_org(db, member.organization_id, payload.category_id)
+    _assert_sku_available(db, member.organization_id, payload.sku)
     product = Product(organization_id=member.organization_id, **payload.model_dump())
     db.add(product)
     db.commit()
@@ -113,9 +165,9 @@ def update_product(
     product = _get_product(db, member.organization_id, product_id)
     data = payload.model_dump(exclude_unset=True)
     if data.get("category_id") is not None:
-        category = db.get(Category, data["category_id"])
-        if category is None or category.organization_id != member.organization_id:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Category not found in your organization")
+        _assert_category_in_org(db, member.organization_id, data["category_id"])
+    if data.get("sku"):
+        _assert_sku_available(db, member.organization_id, data["sku"], exclude_id=product.id)
     for key, value in data.items():
         setattr(product, key, value)
     db.commit()
@@ -131,9 +183,10 @@ def delete_product(
     db: Session = Depends(get_db),
 ) -> MessageOut:
     product = _get_product(db, member.organization_id, product_id)
+    name, sku = product.name, product.sku
     db.delete(product)
     db.commit()
-    write_audit(db, member.organization_id, member.user_id, "product.deleted", "product", product_id)
+    write_audit(db, member.organization_id, member.user_id, "product.deleted", "product", product_id, {"name": name, "sku": sku})
     return MessageOut(message="Product deleted")
 
 
@@ -159,6 +212,13 @@ def create_category(
     member: OrganizationMember = Depends(require_permission(P_PRODUCTS_MANAGE)),
     db: Session = Depends(get_db),
 ) -> CategoryOut:
+    duplicate = (
+        db.query(Category.id)
+        .filter(Category.organization_id == member.organization_id, func.lower(Category.name) == payload.name.lower())
+        .first()
+    )
+    if duplicate is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"A category named '{payload.name}' already exists")
     category = Category(organization_id=member.organization_id, **payload.model_dump())
     db.add(category)
     db.commit()

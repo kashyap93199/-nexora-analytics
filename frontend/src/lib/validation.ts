@@ -17,18 +17,27 @@ export function validateEmail(email: string): string | null {
 
 export function validatePassword(password: string): string | null {
   if (password.length < 8) return "Password must be at least 8 characters.";
+  if (password.length > 72) return "Password must be 72 characters or fewer.";
   if (!/\d/.test(password)) return "Password must include at least one number.";
   if (!/[A-Z]/.test(password)) return "Password must include at least one uppercase letter.";
   return null;
 }
 
-export function validateRegistration(form: RegistrationForm): RegistrationErrors {
+export interface RegistrationValidationOptions {
+  /** When accepting an invitation the organization already exists, so its name is not required. */
+  requireOrganization?: boolean;
+}
+
+export function validateRegistration(form: RegistrationForm, options: RegistrationValidationOptions = {}): RegistrationErrors {
+  const { requireOrganization = true } = options;
   const errors: RegistrationErrors = {};
   if (form.full_name.trim().length < 2) errors.full_name = "Please enter your full name.";
   const emailError = validateEmail(form.email);
   if (emailError) errors.email = emailError;
   const passwordError = validatePassword(form.password);
   if (passwordError) errors.password = passwordError;
-  if (form.organization_name.trim().length < 2) errors.organization_name = "Enter your company or organization name.";
+  if (requireOrganization && form.organization_name.trim().length < 2) {
+    errors.organization_name = "Enter your company or organization name.";
+  }
   return errors;
 }

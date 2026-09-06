@@ -1,6 +1,7 @@
 """Audit log endpoints."""
 
 import json
+from datetime import date, datetime, time
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
@@ -10,6 +11,7 @@ from app.auth.permissions import P_AUDIT_VIEW
 from app.database.db import get_db
 from app.models import AuditLog, OrganizationMember, User
 from app.schemas.common import Page
+from app.utils.query import icontains
 
 router = APIRouter(prefix="/audit-logs", tags=["audit"])
 
@@ -17,6 +19,9 @@ router = APIRouter(prefix="/audit-logs", tags=["audit"])
 @router.get("")
 def list_audit_logs(
     action: str | None = Query(None, max_length=120),
+    resource_type: str | None = Query(None, max_length=60),
+    start: date | None = Query(None, description="Only entries on/after this day"),
+    end: date | None = Query(None, description="Only entries on/before this day"),
     pagination: tuple[int, int] = Depends(pagination_params),
     member: OrganizationMember = Depends(require_permission(P_AUDIT_VIEW)),
     db: Session = Depends(get_db),
@@ -24,9 +29,15 @@ def list_audit_logs(
     page, page_size = pagination
     query = db.query(AuditLog).filter(AuditLog.organization_id == member.organization_id)
     if action:
-        query = query.filter(AuditLog.action.ilike(f"%{action}%"))
+        query = query.filter(icontains(AuditLog.action, action))
+    if resource_type:
+        query = query.filter(AuditLog.resource_type == resource_type)
+    if start:
+        query = query.filter(AuditLog.created_at >= datetime.combine(start, time.min))
+    if end:
+        query = query.filter(AuditLog.created_at <= datetime.combine(end, time.max))
     total = query.count()
-    rows = query.order_by(AuditLog.created_at.desc()).offset((page - 1) * page_size).limit(page_size).all()
+    rows = query.order_by(AuditLog.created_at.desc(), AuditLog.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
     user_ids = {row.user_id for row in rows if row.user_id is not None}
     users = (
         {u.id: u.full_name for u in db.query(User).filter(User.id.in_(user_ids)).all()} if user_ids else {}

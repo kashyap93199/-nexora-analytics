@@ -22,6 +22,17 @@ describe("validateRegistration", () => {
     expect(validateRegistration({ ...valid, full_name: "A" }).full_name).toBeDefined();
   });
 
+  it("does not require an organization name when joining via invitation", () => {
+    const invited = { ...valid, organization_name: "" };
+    expect(validateRegistration(invited).organization_name).toBeDefined();
+    expect(validateRegistration(invited, { requireOrganization: false })).toEqual({});
+  });
+
+  it("rejects passwords longer than the 72-byte bcrypt limit", () => {
+    expect(validatePassword("A1" + "x".repeat(71))).toMatch(/72 characters/);
+    expect(validatePassword("A1" + "x".repeat(70))).toBeNull();
+  });
+
   it("rejects malformed emails", () => {
     expect(validateEmail("not-an-email")).toMatch(/valid email/);
     expect(validateEmail("missing@tld")).toMatch(/valid email/);

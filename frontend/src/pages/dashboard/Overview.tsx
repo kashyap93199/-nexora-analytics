@@ -6,7 +6,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useApi } from "../../hooks/useApi";
 import { useDocumentTitle } from "../../hooks/useUi";
 import { cn, formatCurrency as fc, formatNumber, timeAgo } from "../../lib/utils";
-import type { Goal, OverviewResponse, SeriesPoint } from "../../types";
+import type { Goal, Interval, OverviewResponse, SeriesPoint } from "../../types";
 import { Card, CardBody, CardHeader } from "../../components/ui/Card";
 import { EmptyState, ErrorState, Skeleton, SkeletonRows } from "../../components/ui/Feedback";
 import { Segmented } from "../../components/ui/Tabs";
@@ -16,7 +16,6 @@ import { OrderStatusBadge } from "../../components/ui/Badge";
 import { ChartCard } from "../../charts/ChartCard";
 import { CHART_COLORS, DonutChart, LineAreaChart, SimpleBarChart } from "../../charts/index";
 
-type Interval = "day" | "week" | "month" | "year";
 
 export default function OverviewPage() {
   const { range } = useDateRange();
@@ -24,10 +23,18 @@ export default function OverviewPage() {
   const currency = me?.organization.currency ?? "USD";
   useDocumentTitle("Overview");
 
-  const [interval, setInterval] = useState<Interval>("month");
+  // "auto" follows the granularity the server picked for the range (day for
+  // short ranges, month for long ones); a manual pick re-queries the revenue series.
+  const [intervalChoice, setIntervalChoice] = useState<Interval | "auto">("auto");
   const qs = `start=${range.start}&end=${range.end}`;
   const { data, loading, error, refetch } = useApi<OverviewResponse>(`/api/dashboard/overview?${qs}`, qs);
-  const interactiveRevenue = useApi<{ interval: string; total: number; points: SeriesPoint[] }>(`/api/analytics/revenue?${qs}&interval=${interval}`, `${qs}-${interval}`);
+  const serverInterval: Interval = data?.range.interval ?? "month";
+  const interval: Interval = intervalChoice === "auto" ? serverInterval : intervalChoice;
+  const useBundledSeries = intervalChoice === "auto" || intervalChoice === serverInterval;
+  const interactiveRevenue = useApi<{ interval: string; total: number; points: SeriesPoint[] }>(
+    useBundledSeries ? null : `/api/analytics/revenue?${qs}&interval=${interval}`,
+    `${qs}-${interval}-${useBundledSeries}`
+  );
 
   if (error) {
     return <ErrorState message="Unable to load your dashboard overview." onRetry={refetch} className="mt-10" />;
@@ -35,7 +42,7 @@ export default function OverviewPage() {
 
   const kpis = data?.kpis;
 
-  const revenuePoints = (interval === "month" ? data?.revenue_series.points : interactiveRevenue.data?.points) ?? [];
+  const revenuePoints = (useBundledSeries ? data?.revenue_series.points : interactiveRevenue.data?.points) ?? [];
   const customerPoints = data?.customer_series.points ?? [];
 
   return (
@@ -63,10 +70,11 @@ export default function OverviewPage() {
           loading={loading}
           height={330}
           actions={
-            <Segmented<Interval>
-              value={interval}
-              onChange={setInterval}
+            <Segmented<Interval | "auto">
+              value={intervalChoice}
+              onChange={setIntervalChoice}
               options={[
+                { value: "auto", label: "Auto" },
                 { value: "day", label: "Daily" },
                 { value: "week", label: "Weekly" },
                 { value: "month", label: "Monthly" },
@@ -75,7 +83,7 @@ export default function OverviewPage() {
             />
           }
         >
-          {interactiveRevenue.loading && interval !== "month" ? (
+          {interactiveRevenue.loading && !useBundledSeries ? (
             <div className="flex h-full items-center justify-center"><Skeleton className="h-full w-full" /></div>
           ) : (
             <LineAreaChart
@@ -234,6 +242,8 @@ export default function OverviewPage() {
 /** Small reusable goals-with-progress panel used on Overview. */
 export function GoalsPanel() {
   const goals = useApi<Goal[]>("/api/goals");
+  const { me } = useAuth();
+  const currency = me?.organization.currency ?? "USD";
 
   return (
     <Card>
@@ -263,7 +273,7 @@ export function GoalsPanel() {
                 <ProgressBar value={pct} />
                 <p className="mt-1 text-[11px] text-muted tabular">
                   {goal.type === "revenue" || goal.type === "profit"
-                    ? `${fc(goal.progress ?? 0, "USD")} of ${fc(goal.target, "USD")}`
+                    ? `${fc(goal.progress ?? 0, currency)} of ${fc(goal.target, currency)}`
                     : `${formatNumber(goal.progress ?? 0)} of ${formatNumber(goal.target)}`}
                 </p>
               </div>

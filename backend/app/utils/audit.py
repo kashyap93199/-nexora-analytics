@@ -15,7 +15,14 @@ def write_audit(
     resource_type: str = "",
     resource_id: int | None = None,
     details: dict | None = None,
+    *,
+    commit: bool = True,
 ) -> None:
+    """Record an audit event.
+
+    Pass ``commit=False`` when the caller is in the middle of a larger unit of
+    work and wants the audit row to commit (or roll back) together with it.
+    """
     db.add(
         AuditLog(
             organization_id=organization_id,
@@ -26,4 +33,5 @@ def write_audit(
             details=json.dumps(details) if details else None,
         )
     )
-    db.commit()
+    if commit:
+        db.commit()

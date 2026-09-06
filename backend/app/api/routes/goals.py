@@ -63,10 +63,15 @@ def update_goal(
     goal = db.query(Goal).filter(Goal.id == goal_id, Goal.organization_id == member.organization_id).first()
     if goal is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Goal not found")
-    for key, value in payload.model_dump(exclude_unset=True).items():
-        setattr(goal, key, value)
-    if goal.ends_at <= goal.starts_at:
+    data = payload.model_dump(exclude_unset=True)
+    new_start = data.get("starts_at", goal.starts_at)
+    new_end = data.get("ends_at", goal.ends_at)
+    if new_end <= new_start:
+        # Validate *before* touching the ORM object so a rejected update never
+        # leaves half-applied changes in the session.
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="ends_at must be after starts_at")
+    for key, value in data.items():
+        setattr(goal, key, value)
     db.commit()
     db.refresh(goal)
     write_audit(db, member.organization_id, member.user_id, "goal.updated", "goal", goal.id)
@@ -82,6 +87,8 @@ def delete_goal(
     goal = db.query(Goal).filter(Goal.id == goal_id, Goal.organization_id == member.organization_id).first()
     if goal is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Goal not found")
+    name = goal.name
     db.delete(goal)
     db.commit()
+    write_audit(db, member.organization_id, member.user_id, "goal.deleted", "goal", goal_id, {"name": name})
     return MessageOut(message="Goal deleted")

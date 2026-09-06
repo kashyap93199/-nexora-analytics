@@ -4,14 +4,13 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useApi } from "../../hooks/useApi";
 import { useDocumentTitle } from "../../hooks/useUi";
 import { formatCurrency as fc, formatNumber } from "../../lib/utils";
-import type { CustomerMetrics, SalesMetrics, SeriesPoint } from "../../types";
+import type { CustomerMetrics, Interval, SalesMetrics, SeriesPoint } from "../../types";
 import { ErrorState, EmptyState } from "../../components/ui/Feedback";
 import { Segmented } from "../../components/ui/Tabs";
 import { PageHeader } from "../../components/ui/base";
 import { ChartCard } from "../../charts/ChartCard";
 import { CHART_COLORS, DonutChart, LineAreaChart, SimpleBarChart } from "../../charts/index";
 
-type Interval = "day" | "week" | "month" | "year";
 
 interface CustomerSeriesResponse {
   metrics: CustomerMetrics;

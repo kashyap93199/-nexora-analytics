@@ -11,7 +11,7 @@ class EmailUpdate(BaseModel):
 
 class PasswordChange(BaseModel):
     current_password: str = Field(min_length=1, max_length=128)
-    new_password: str = Field(min_length=8, max_length=128)
+    new_password: str = Field(min_length=8, max_length=72)  # bcrypt limit
 
     @field_validator("new_password")
     @classmethod
@@ -25,7 +25,8 @@ class PasswordChange(BaseModel):
 
 class OrgUpdate(BaseModel):
     name: str = Field(min_length=2, max_length=120)
-    currency: str = Field(min_length=3, max_length=8)
+    currency: str = Field(min_length=3, max_length=3, pattern="^[A-Za-z]{3}$")  # ISO-4217 code
+    low_stock_threshold: int | None = Field(None, ge=0, le=100_000)
 
 
 class InviteIn(BaseModel):

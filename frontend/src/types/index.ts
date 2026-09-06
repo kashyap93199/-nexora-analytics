@@ -14,6 +14,8 @@ export interface Organization {
   slug: string;
   plan: string;
   currency: string;
+  /** Products at or below this stock level are flagged as low stock. */
+  low_stock_threshold: number;
 }
 
 export interface AuthResponse {
@@ -25,11 +27,17 @@ export interface AuthResponse {
   role: string;
 }
 
+export interface Workspace extends Organization {
+  role: string;
+}
+
 export interface MeResponse {
   user: User;
   organization: Organization;
   role: string;
   permissions: string[];
+  /** Every organization the user can switch into (includes the current one). */
+  workspaces: Workspace[];
 }
 
 export interface Page<T> {
@@ -139,8 +147,11 @@ export interface SeriesPoint {
   total?: number;
 }
 
+export type Interval = "day" | "week" | "month" | "year";
+
 export interface OverviewResponse {
-  range: { start: string; end: string };
+  /** `interval` is the granularity the server picked for the bundled series. */
+  range: { start: string; end: string; interval: Interval };
   kpis: Kpis;
   revenue_series: { interval: string; total: number; points: SeriesPoint[] };
   sales_series: { interval: string; points: SeriesPoint[]; totals: Record<string, number> };
@@ -157,7 +168,7 @@ export interface OverviewResponse {
     total: number;
     placed_at: string;
   }[];
-  low_stock: { id: number; name: string; stock: number; sku: string }[];
+  low_stock: { id: number; name: string; stock: number; sku: string; threshold: number }[];
 }
 
 export interface ProductPerformance {

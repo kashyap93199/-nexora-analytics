@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Search, UserPlus, Users } from "lucide-react";
+import { Download, Search, UserPlus, Users } from "lucide-react";
 import { useDateRange } from "../../contexts/DateRangeContext";
 import { useAuth } from "../../contexts/AuthContext";
 import { useApi, useMutation } from "../../hooks/useApi";
 import { useDebounced, useDocumentTitle } from "../../hooks/useUi";
 import { useToast } from "../../contexts/ToastContext";
-import { api } from "../../services/api";
+import { api, downloadCsv } from "../../services/api";
 import { PERMISSIONS, type Customer, type CustomerMetrics } from "../../types";
 import { formatCurrency as fc, formatDate, formatNumber, apiErrorMessage } from "../../lib/utils";
 import { Card } from "../../components/ui/Card";
@@ -28,6 +28,8 @@ export default function CustomersPage() {
   useDocumentTitle("Customers");
   const toast = useToast();
   const canManage = hasPermission(PERMISSIONS.customersManage);
+  const canExport = hasPermission(PERMISSIONS.salesExport);
+  const [exporting, setExporting] = useState(false);
 
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounced(search, 350);
@@ -67,11 +69,36 @@ export default function CustomersPage() {
         title="Customers"
         description="Search your customer base and understand segments, spending and activity."
         actions={
-          canManage && (
-            <Button leftIcon={<UserPlus className="h-4 w-4" />} onClick={() => setCreateOpen(true)}>
-              Add customer
-            </Button>
-          )
+          <div className="flex items-center gap-2">
+            {canExport && (
+              <Button
+                variant="outline"
+                leftIcon={<Download className="h-4 w-4" />}
+                loading={exporting}
+                onClick={async () => {
+                  setExporting(true);
+                  try {
+                    const exportParams = new URLSearchParams();
+                    if (debouncedSearch) exportParams.set("search", debouncedSearch);
+                    if (segment) exportParams.set("segment", segment);
+                    await downloadCsv(`/api/customers/export?${exportParams.toString()}`, "customers.csv");
+                    toast.success("Customers exported");
+                  } catch (err) {
+                    toast.error(apiErrorMessage(err));
+                  } finally {
+                    setExporting(false);
+                  }
+                }}
+              >
+                Export CSV
+              </Button>
+            )}
+            {canManage && (
+              <Button leftIcon={<UserPlus className="h-4 w-4" />} onClick={() => setCreateOpen(true)}>
+                Add customer
+              </Button>
+            )}
+          </div>
         }
       />
 

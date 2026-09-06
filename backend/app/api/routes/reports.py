@@ -1,7 +1,5 @@
 """Report endpoints: generate snapshots, list, view, export CSV, delete."""
 
-import csv
-import io
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -16,6 +14,7 @@ from app.schemas.common import MessageOut
 from app.schemas.engagement import ReportCreate
 from app.services import analytics
 from app.utils.audit import write_audit
+from app.utils.csv_export import csv_response
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
@@ -46,7 +45,7 @@ def _snapshot(db: Session, org_id: int, report_type: str, start, end) -> dict:
 
 @router.get("")
 def list_reports(
-    type_filter: str | None = Query(None, alias="type"),
+    type_filter: str | None = Query(None, alias="type", pattern="^(sales|revenue|customer|product|performance)$"),
     member: OrganizationMember = Depends(require_permission(P_REPORTS_VIEW)),
     db: Session = Depends(get_db),
 ) -> list[dict]:
@@ -74,6 +73,8 @@ def create_report(
     member: OrganizationMember = Depends(require_permission(P_REPORTS_CREATE)),
     db: Session = Depends(get_db),
 ) -> dict:
+    if payload.end_date < payload.start_date:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="end_date must be on or after start_date")
     data = _snapshot(db, member.organization_id, payload.type, payload.start_date, payload.end_date)
     filters = {
         "start": payload.start_date.isoformat(),
@@ -180,24 +181,13 @@ def export_report(report_id: int, member: OrganizationMember = Depends(require_p
 
     # Some report types mix row shapes (e.g. revenue: Metric rows then Period
     # rows). Union all keys so every column appears and no row is dropped.
-    fieldnames = []
+    fieldnames: list[str] = []
     for row in rows:
         for key in row.keys():
             if key not in fieldnames:
                 fieldnames.append(key)
 
-    buffer = io.StringIO()
-    writer = csv.DictWriter(buffer, fieldnames=fieldnames, extrasaction="ignore")
-    writer.writeheader()
-    writer.writerows(rows)
-    buffer.seek(0)
-
-    filename = f"{report.name.replace(' ', '_')}.csv"
-    return StreamingResponse(
-        iter([buffer.getvalue()]),
-        media_type="text/csv",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
+    return csv_response(rows, fieldnames, report.name)
 
 
 @router.delete("/{report_id}", response_model=MessageOut)
@@ -209,6 +199,8 @@ def delete_report(
     report = db.query(Report).filter(Report.id == report_id, Report.organization_id == member.organization_id).first()
     if report is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
+    name = report.name
     db.delete(report)
     db.commit()
+    write_audit(db, member.organization_id, member.user_id, "report.deleted", "report", report_id, {"name": name})
     return MessageOut(message="Report deleted")

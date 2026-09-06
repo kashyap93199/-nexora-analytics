@@ -1,7 +1,7 @@
 """FastAPI dependencies for authentication, multi-tenant org scoping and RBAC."""
 
 import jwt
-from fastapi import Depends, HTTPException, Query, status
+from fastapi import Depends, HTTPException, Query, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
@@ -13,6 +13,7 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 
 def get_current_user(
+    request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ) -> User:
@@ -32,20 +33,35 @@ def get_current_user(
     user = db.get(User, user_id)
     if user is None or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    # Remember which workspace this token was issued for (see get_membership).
+    request.state.token_org_id = payload.get("org")
     return user
 
 
+def resolve_membership(db: Session, user_id: int, organization_id: int | None) -> OrganizationMember | None:
+    """Return the user's active membership for ``organization_id``.
+
+    Falls back to the user's oldest active membership when no organization is
+    requested (or the requested one is no longer accessible), so a stale token
+    never strands a user who still belongs to some workspace.
+    """
+    base = db.query(OrganizationMember).filter(
+        OrganizationMember.user_id == user_id, OrganizationMember.status == "active"
+    )
+    if organization_id is not None:
+        member = base.filter(OrganizationMember.organization_id == organization_id).first()
+        if member is not None:
+            return member
+    return base.order_by(OrganizationMember.id.asc()).first()
+
+
 def get_membership(
+    request: Request,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> OrganizationMember:
     """Resolve the user's active membership (current organization + role)."""
-    member = (
-        db.query(OrganizationMember)
-        .filter(OrganizationMember.user_id == user.id, OrganizationMember.status == "active")
-        .order_by(OrganizationMember.id.asc())
-        .first()
-    )
+    member = resolve_membership(db, user.id, getattr(request.state, "token_org_id", None))
     if member is None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -71,13 +87,18 @@ def require_permission(permission: str):
     return _checker
 
 
-def role_has_permission(db: Session, role: str, permission: str) -> bool:
+def role_permissions(db: Session, role: str) -> set[str]:
+    """All permission keys granted to a role name (empty set for unknown roles)."""
     from app.models import Role
 
     role_obj = db.query(Role).filter(Role.name == role).first()
     if role_obj is None:
-        return False
-    return any(p.key == permission for p in role_obj.permissions)
+        return set()
+    return {p.key for p in role_obj.permissions}
+
+
+def role_has_permission(db: Session, role: str, permission: str) -> bool:
+    return permission in role_permissions(db, role)
 
 
 # Common query params ---------------------------------------------------------

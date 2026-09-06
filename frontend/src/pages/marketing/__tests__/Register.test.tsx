@@ -6,9 +6,9 @@ import { AuthProvider } from "../../../contexts/AuthContext";
 import { ThemeProvider } from "../../../contexts/ThemeContext";
 import { ToastProvider } from "../../../contexts/ToastContext";
 
-function renderRegister() {
+function renderRegister(path = "/register") {
   return render(
-    <MemoryRouter initialEntries={["/register"]}>
+    <MemoryRouter initialEntries={[path]}>
       <ThemeProvider>
         <ToastProvider>
           <AuthProvider>
@@ -34,6 +34,14 @@ describe("RegisterPage form validation", () => {
     expect(screen.getByText("Please enter your full name.")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Alex" } });
     expect(screen.queryByText("Please enter your full name.")).not.toBeInTheDocument();
+  });
+
+  it("hides the organization field and does not require it when an invite token is present", () => {
+    renderRegister("/register?invite=abc123");
+    expect(screen.queryByLabelText(/organization/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /join workspace/i }));
+    expect(screen.getByText("Please enter your full name.")).toBeInTheDocument();
+    expect(screen.queryByText("Enter your company or organization name.")).not.toBeInTheDocument();
   });
 
   it("rejects a weak password with a specific hint", () => {

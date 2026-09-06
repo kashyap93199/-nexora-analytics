@@ -1,7 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, func
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, Numeric, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.db import Base
@@ -37,6 +37,11 @@ class Customer(Base):
 
 class Order(Base):
     __tablename__ = "orders"
+    __table_args__ = (
+        Index("uq_order_org_number", "organization_id", "order_number", unique=True),
+        # Hot path for every analytics query: org + status + placed_at range.
+        Index("ix_orders_org_status_placed", "organization_id", "status", "placed_at"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     organization_id: Mapped[int] = mapped_column(

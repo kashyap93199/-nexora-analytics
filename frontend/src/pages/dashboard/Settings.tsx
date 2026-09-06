@@ -29,19 +29,29 @@ export default function SettingsPage() {
   const [profileName, setProfileName] = useState(me?.user.full_name ?? "");
   const [profileEmail, setProfileEmail] = useState(me?.user.email ?? "");
   const [passwords, setPasswords] = useState({ current_password: "", new_password: "" });
-  const [orgForm, setOrgForm] = useState({ name: me?.organization.name ?? "", currency: me?.organization.currency ?? "USD" });
+  const [orgForm, setOrgForm] = useState({
+    name: me?.organization.name ?? "",
+    currency: me?.organization.currency ?? "USD",
+    low_stock_threshold: me?.organization.low_stock_threshold ?? 15,
+  });
 
   useEffect(() => {
     if (me) {
       setProfileName(me.user.full_name);
       setProfileEmail(me.user.email);
-      setOrgForm((f) => ({ ...f, name: me.organization.name, currency: me.organization.currency }));
+      setOrgForm({
+        name: me.organization.name,
+        currency: me.organization.currency,
+        low_stock_threshold: me.organization.low_stock_threshold ?? 15,
+      });
     }
   }, [me]);
 
   const profileMutation = useMutation(async ({ name, email }: { name: string; email: string }) => {
-    await api.put("/api/settings/profile", { full_name: name });
-    await api.put("/api/settings/email", { email });
+    if (name !== me?.user.full_name) await api.put("/api/settings/profile", { full_name: name });
+    // Only touch the email endpoint when it actually changed (avoids a needless
+    // uniqueness round-trip and audit noise).
+    if (email.toLowerCase() !== me?.user.email.toLowerCase()) await api.put("/api/settings/email", { email });
   });
 
   const saveProfile = async () => {
@@ -70,15 +80,18 @@ export default function SettingsPage() {
     }
   };
 
-  const orgMutation = useMutation(async (payload: { name: string; currency: string }) =>
-    api.put<{ name: string; currency: string }>("/api/settings/organization", payload)
-  );
+  type OrgPayload = { name: string; currency: string; low_stock_threshold: number };
+  const orgMutation = useMutation(async (payload: OrgPayload) => api.put<OrgPayload>("/api/settings/organization", payload));
 
   const saveOrg = async () => {
+    if (orgForm.name.trim().length < 2) {
+      toast.error("Organization name must be at least 2 characters.");
+      return;
+    }
     try {
-      const updated = await orgMutation.run(orgForm);
+      const updated = await orgMutation.run({ ...orgForm, name: orgForm.name.trim() });
       toast.success("Organization updated");
-      setOrgForm({ name: updated.name, currency: updated.currency });
+      setOrgForm({ name: updated.name, currency: updated.currency, low_stock_threshold: updated.low_stock_threshold });
       await refreshMe();
     } catch (err) {
       toast.error(apiErrorMessage(err));
@@ -171,6 +184,16 @@ export default function SettingsPage() {
             <Select value={orgForm.currency} onChange={(e) => setOrgForm((f) => ({ ...f, currency: e.target.value }))} disabled={!canManageOrg}>
               {["USD", "EUR", "GBP", "CAD", "AUD", "INR", "JPY", "BRL", "AED", "SGD"].map((c) => <option key={c}>{c}</option>)}
             </Select>
+          </Field>
+          <Field label="Low-stock threshold" hint="Active products at or below this quantity are flagged on the dashboard and in Products.">
+            <Input
+              type="number"
+              min={0}
+              max={100000}
+              value={orgForm.low_stock_threshold}
+              onChange={(e) => setOrgForm((f) => ({ ...f, low_stock_threshold: Math.max(0, Number(e.target.value) || 0) }))}
+              disabled={!canManageOrg}
+            />
           </Field>
           <div className="md:col-span-2 flex items-center justify-between">
             <div className="text-sm text-muted">

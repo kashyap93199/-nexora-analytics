@@ -59,11 +59,13 @@ need one place to understand **revenue, orders, customers, products and performa
 - **Sales analytics** with region / channel / product / category filters and CSV export
 - **Customer analytics**: segments (New / Returning / VIP / Inactive), retention, lifetime value, per-customer profiles with purchase history
 - **Product performance table**: units, revenue, profit, margin, trend, inventory alerts + full CRUD
-- **Orders**: search, filter, sort, pagination, detail view, status workflow, order creation
+- **Orders**: search, filter, sort, pagination, detail view, **enforced status state machine** (stock is reserved for live orders and released on cancel), order creation
 - **Reports**: 5 report types, preview, saved snapshots, CSV export
+- **One-click CSV exports** of the filtered Orders, Customers and Products lists (`sales:export` permission, audited, formula-safe)
 - **Goals**: revenue / orders / customers / profit targets with **live progress** computed from data
-- **Team**: invite (shareable link), roles, activity, removal
-- **Notifications**, **global search (⌘K)**, **settings**, **audit logs** (owner)
+- **Team**: invite (shareable link), re-send/rotate invites, roles with owner-safety rails, activity, removal
+- **Multi-workspace accounts**: a user invited to several organizations can switch between them from the account menu
+- **Notifications**, **global search (⌘K)**, **settings** (currency, configurable low-stock threshold), **audit logs** (owner, filterable by action / resource / date)
 - **Dark mode** (light / dark / system, persisted) and **responsive layouts** (375px → 4K)
 - Loading skeletons, empty states, error states, toasts, confirmation dialogs everywhere
 
@@ -146,23 +148,30 @@ Base URL `/api` — interactive docs at `/api/docs` (Swagger). All business endp
 
 | Area | Endpoints |
 | --- | --- |
-| Auth | `POST /auth/register` · `POST /auth/login` · `POST /auth/refresh` · `GET /auth/me` · `POST /auth/logout` |
-| Dashboard | `GET /dashboard/overview` (KPIs + series + top products + recent orders + low stock) |
+| Auth | `POST /auth/register` · `POST /auth/login` · `POST /auth/refresh` · `GET /auth/me` (includes `permissions` + `workspaces`) · `GET /auth/workspaces` · `POST /auth/switch-organization` · `POST /auth/logout` |
+| Dashboard | `GET /dashboard/overview` (KPIs + zero-filled series at an auto-selected interval + top products + recent orders + low stock) |
 | Analytics | `GET /analytics/revenue?start&end&interval` · `/analytics/sales` · `/analytics/customers` · `/analytics/products` · `/analytics/categories` · `/analytics/geographic` |
-| Catalog | `GET/POST/PUT/DELETE /products[/{id}]`, `GET/POST /categories…` |
-| Customers | `GET/POST /customers` · `GET /customers/{id}` (with history) · `PUT/DELETE` |
-| Orders | `GET/POST /orders` · `GET /orders/{id}` · `PATCH /orders/{id}/status` |
+| Catalog | `GET/POST/PUT/DELETE /products[/{id}]` · `GET /products/export` (CSV) · `GET/POST /categories…` |
+| Customers | `GET/POST /customers` · `GET /customers/{id}` (with history) · `PUT/DELETE` · `GET /customers/export` (CSV) |
+| Orders | `GET/POST /orders` (filters incl. `customer_id`) · `GET /orders/{id}` · `PATCH /orders/{id}/status` (409 on illegal transition) · `GET /orders/export` (CSV) |
 | Reports | `GET/POST /reports` · `GET /reports/{id}` · `GET /reports/{id}/export` (CSV) · `DELETE` |
-| Goals / Team | `GET/POST/PUT/DELETE /goals…` · `GET /team` · `POST /team/invite` · `PUT /team/{id}/role` · `DELETE /team/{id}` |
+| Goals / Team | `GET/POST/PUT/DELETE /goals…` · `GET /team` · `POST /team/invite` · `POST /team/{id}/resend` · `PUT /team/{id}/role` · `DELETE /team/{id}` |
 | Notifications | `GET /notifications` · `POST /notifications/{id}/read` · `POST /notifications/read-all` |
-| Other | `GET /search?q=` (categorized global search) · `GET/PUT /settings/…` · `GET /audit-logs` |
+| Other | `GET /search?q=` (categorized global search) · `GET/PUT /settings/…` · `GET /audit-logs?action&resource_type&start&end` · `GET /health` (`{status, database, version}`) |
 
 Responses use consistent shapes: `Page<T> { items, total, page, page_size, pages }` for lists,
-`{"detail": "human message"}` for errors with proper status codes (400/401/403/404/409/422/429).
+`{"detail": "human message"}` for errors with proper status codes (400/401/403/404/409/422/429/503).
+Every response carries an `X-Request-ID` header (echoed from the request if supplied) plus
+`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` and `Permissions-Policy`.
+
+**Order status state machine** (enforced server-side, mirrored in the UI):
+`pending → processing | shipped | delivered | cancelled` · `processing → shipped | delivered | cancelled` ·
+`shipped → delivered | cancelled | refunded` · `delivered → refunded` · `cancelled` / `refunded` are terminal.
+Stock is held while an order is pending/processing/shipped/delivered and released when it is cancelled or refunded.
 
 ## 🚀 Getting started (local dev)
 
-Prerequisites: **Python 3.10+**, **Node 18+**.
+Prerequisites: **Python 3.10+** (3.11 recommended, used in Docker), **Node 18+**.
 
 ```bash
 # 1) Backend
@@ -214,10 +223,10 @@ email to get a fresh, empty organization.
 
 | Suite | What it covers | How to run |
 | --- | --- | --- |
-| Backend (`backend/tests/`) | Registration/login/refresh/validation, RBAC for all 5 roles, **tenant isolation**, analytics math on controlled data, goal progress, date-range filtering | `cd backend && .venv/bin/python -m pytest` (22 tests) |
+| Backend (`backend/tests/`) | Registration/login/refresh/validation, RBAC for all 5 roles, **tenant isolation**, analytics math on controlled data, goal progress, date-range filtering, plus `test_regressions.py` covering every bug fixed in the audit (workspace switching, order state machine, stock release, uniqueness rules, CSV exports, LIKE escaping, low-stock threshold, audit filters…) | `cd backend && .venv/bin/python -m pytest` (53 tests) |
 | Backend smoke | End-to-end CRUD + auth + export against the seeded DB | `python scripts/smoke_test.py` |
 | Runtime QA | User journeys, invite flow, RBAC attempts, tenancy ID-swap, report exports | `PYTHONPATH=. python scripts/audit_runtime.py` |
-| Frontend (Vitest) | Validators, date presets, formatting, Badge/Button/Delta/ProgressBar/StatCard, **registration form validation flow** | `cd frontend && npm run test` (24 tests) |
+| Frontend (Vitest) | Validators (incl. invite mode), date presets, date-range persistence, order-transition table, formatting, Badge/Button/Delta/ProgressBar/StatCard, **registration form validation flow** | `cd frontend && npm run test` (36 tests) |
 
 ## 🐳 Docker
 
@@ -261,6 +270,20 @@ backend URL (or build with `VITE_API_URL=https://your-api.example`).
 | Team & Settings | Invite flow with shareable links, role matrix, audit log, appearance |
 
 Both themes are fully supported. See `frontend/src/pages/` for source.
+
+## ⚙️ Configuration
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `SECRET_KEY` | dev placeholder (warning logged) | JWT signing key — **must** be set in production |
+| `DATABASE_URL` | `sqlite:///./nexora.db` | SQLAlchemy URL (SQLite for dev, `postgresql+psycopg://…` in Docker) |
+| `APP_ENV` | `development` | Reported by `/api/health`; `production` tightens defaults |
+| `CORS_ORIGINS` | localhost origins | JSON/CSV list of allowed browser origins |
+| `RATE_LIMIT_ENABLED` | `true` | In-memory per-IP limiter for auth endpoints |
+| `TRUST_PROXY_HEADERS` | `false` | Honour `X-Forwarded-For` for rate limiting — enable **only** behind a trusted reverse proxy (docker-compose sets it) |
+
+See `INSPECTION_AND_IMPROVEMENTS_REPORT.md` for the full audit of the codebase, every defect found,
+how each was fixed and which features were added.
 
 ## 🔮 Future improvements
 

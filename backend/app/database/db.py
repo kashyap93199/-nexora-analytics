@@ -62,3 +62,31 @@ def init_db() -> None:
     if "invite_email" not in cols:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE organization_members ADD COLUMN invite_email VARCHAR(255)"))
+    org_cols = {c["name"] for c in inspector.get_columns("organizations")}
+    if "low_stock_threshold" not in org_cols:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE organizations ADD COLUMN low_stock_threshold INTEGER NOT NULL DEFAULT 15"))
+
+    # Indexes declared in __table_args__ are only created by create_all for
+    # *new* tables; add them to pre-existing databases too. Unique indexes are
+    # skipped (with a warning) if legacy data already violates them.
+    import logging
+
+    wanted = {
+        "products": [("uq_product_org_sku", ["organization_id", "sku"], True)],
+        "orders": [
+            ("uq_order_org_number", ["organization_id", "order_number"], True),
+            ("ix_orders_org_status_placed", ["organization_id", "status", "placed_at"], False),
+        ],
+    }
+    for table, indexes in wanted.items():
+        existing = {ix["name"] for ix in inspector.get_indexes(table)}
+        for name, columns, unique in indexes:
+            if name in existing:
+                continue
+            stmt = f"CREATE {'UNIQUE ' if unique else ''}INDEX {name} ON {table} ({', '.join(columns)})"
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text(stmt))
+            except Exception as exc:  # pragma: no cover - only for legacy data
+                logging.getLogger("nexora").warning("Could not create index %s: %s", name, str(exc)[:160])

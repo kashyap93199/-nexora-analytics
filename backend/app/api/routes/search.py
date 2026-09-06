@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_membership
 from app.database.db import get_db
 from app.models import Customer, Order, OrganizationMember, Product, Report
+from app.utils.query import icontains
 
 router = APIRouter(prefix="/search", tags=["search"])
 
@@ -19,20 +20,19 @@ def global_search(
     db: Session = Depends(get_db),
 ) -> dict:
     org_id = member.organization_id
-    like = f"%{q}%"
 
     customers = (
         db.query(Customer)
         .filter(
             Customer.organization_id == org_id,
-            or_(Customer.name.ilike(like), Customer.email.ilike(like)),
+            or_(icontains(Customer.name, q), icontains(Customer.email, q)),
         )
         .limit(limit)
         .all()
     )
     orders = (
         db.query(Order)
-        .filter(Order.organization_id == org_id, Order.order_number.ilike(like))
+        .filter(Order.organization_id == org_id, icontains(Order.order_number, q))
         .limit(limit)
         .all()
     )
@@ -40,14 +40,14 @@ def global_search(
         db.query(Product)
         .filter(
             Product.organization_id == org_id,
-            or_(Product.name.ilike(like), Product.sku.ilike(like)),
+            or_(icontains(Product.name, q), icontains(Product.sku, q)),
         )
         .limit(limit)
         .all()
     )
     reports = (
         db.query(Report)
-        .filter(Report.organization_id == org_id, Report.name.ilike(like))
+        .filter(Report.organization_id == org_id, icontains(Report.name, q))
         .limit(limit)
         .all()
     )

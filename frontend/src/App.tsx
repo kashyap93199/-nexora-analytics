@@ -59,6 +59,9 @@ function RequirePermission({ permission, children }: { permission: string; child
   return <>{children}</>;
 }
 
+/** Shorthand used by the dashboard routes below. */
+const Guarded = RequirePermission;
+
 function GuestOnly({ children }: { children: ReactNode }) {
   const { status } = useAuth();
   if (status === "loading") return <PageLoader label="Loading…" />;
@@ -95,26 +98,19 @@ export default function App() {
           }
         >
           <Route index element={<Navigate to="/app/overview" replace />} />
-          <Route
-            path="overview"
-            element={
-              <RequirePermission permission={PERMISSIONS.dashboardView}>
-                <OverviewPage />
-              </RequirePermission>
-            }
-          />
-          <Route path="analytics" element={<AnalyticsPage />} />
-          <Route path="sales" element={<SalesPage />} />
-          <Route path="customers" element={<CustomersPage />} />
-          <Route path="customers/:customerId" element={<CustomerDetailPage />} />
-          <Route path="products" element={<ProductsPage />} />
-          <Route path="orders" element={<OrdersPage />} />
-          <Route path="orders/:orderId" element={<OrderDetailPage />} />
-          <Route path="reports" element={<ReportsPage />} />
-          <Route path="goals" element={<GoalsPage />} />
-          <Route path="team" element={<TeamPage />} />
-          <Route path="integrations" element={<IntegrationsPage />} />
-          <Route path="notifications" element={<NotificationsPage />} />
+          <Route path="overview" element={<Guarded permission={PERMISSIONS.dashboardView}><OverviewPage /></Guarded>} />
+          <Route path="analytics" element={<Guarded permission={PERMISSIONS.analyticsView}><AnalyticsPage /></Guarded>} />
+          <Route path="sales" element={<Guarded permission={PERMISSIONS.salesView}><SalesPage /></Guarded>} />
+          <Route path="customers" element={<Guarded permission={PERMISSIONS.customersView}><CustomersPage /></Guarded>} />
+          <Route path="customers/:customerId" element={<Guarded permission={PERMISSIONS.customersView}><CustomerDetailPage /></Guarded>} />
+          <Route path="products" element={<Guarded permission={PERMISSIONS.productsView}><ProductsPage /></Guarded>} />
+          <Route path="orders" element={<Guarded permission={PERMISSIONS.ordersView}><OrdersPage /></Guarded>} />
+          <Route path="orders/:orderId" element={<Guarded permission={PERMISSIONS.ordersView}><OrderDetailPage /></Guarded>} />
+          <Route path="reports" element={<Guarded permission={PERMISSIONS.reportsView}><ReportsPage /></Guarded>} />
+          <Route path="goals" element={<Guarded permission={PERMISSIONS.goalsView}><GoalsPage /></Guarded>} />
+          <Route path="team" element={<Guarded permission={PERMISSIONS.teamView}><TeamPage /></Guarded>} />
+          <Route path="integrations" element={<Guarded permission={PERMISSIONS.settingsManage}><IntegrationsPage /></Guarded>} />
+          <Route path="notifications" element={<Guarded permission={PERMISSIONS.notificationsView}><NotificationsPage /></Guarded>} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>
 

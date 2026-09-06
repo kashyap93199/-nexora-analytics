@@ -16,6 +16,16 @@ import { cn } from "../../lib/utils";
 
 const STATUS_FLOW: OrderStatus[] = ["pending", "processing", "shipped", "delivered"];
 
+/** Mirrors the server-side state machine so the UI only offers valid moves. */
+const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
+  pending: ["processing", "shipped", "delivered", "cancelled"],
+  processing: ["shipped", "delivered", "cancelled"],
+  shipped: ["delivered", "cancelled", "refunded"],
+  delivered: ["refunded"],
+  cancelled: [],
+  refunded: [],
+};
+
 export default function OrderDetailPage() {
   const { orderId } = useParams();
   const { me, hasPermission } = useAuth();
@@ -70,11 +80,13 @@ export default function OrderDetailPage() {
             {STATUS_FLOW.map((step, i) => {
               const reached = !isTerminal && i <= Math.max(flowIndex, 0);
               const current = !isTerminal && i === flowIndex;
+              const allowed = ALLOWED_TRANSITIONS[order.status].includes(step);
               return (
                 <button
                   key={step}
                   onClick={() => void changeStatus(step)}
-                  disabled={mutation.loading}
+                  disabled={mutation.loading || !allowed}
+                  title={allowed ? `Mark as ${step}` : current ? "Current status" : `Cannot move from ${order.status} to ${step}`}
                   className={cn(
                     "flex flex-1 items-center gap-2 disabled:cursor-not-allowed",
                     i === STATUS_FLOW.length - 1 && "flex-none"
@@ -96,16 +108,21 @@ export default function OrderDetailPage() {
               );
             })}
           </div>
-          <div className="mt-4 flex gap-2 border-t border-border pt-4">
-            {order.status !== "cancelled" && (
+          <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-4">
+            {ALLOWED_TRANSITIONS[order.status].includes("cancelled") && (
               <Button variant="outline" size="sm" className="text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10" onClick={() => void changeStatus("cancelled")} disabled={mutation.loading}>
                 Cancel order
               </Button>
             )}
-            {order.status !== "refunded" && (
+            {ALLOWED_TRANSITIONS[order.status].includes("refunded") && (
               <Button variant="ghost" size="sm" onClick={() => void changeStatus("refunded")} disabled={mutation.loading}>
                 Mark refunded
               </Button>
+            )}
+            {isTerminal && (
+              <p className="text-xs text-muted">
+                This order is {order.status}{order.status === "cancelled" ? " — reserved stock has been released" : ""}. No further changes are possible.
+              </p>
             )}
           </div>
         </Card>

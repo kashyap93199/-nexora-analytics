@@ -16,6 +16,7 @@ from app.models import (
     Goal,
     Order,
     OrderItem,
+    Organization,
     Product,
     RevenueRecord,
     SalesRecord,
@@ -77,6 +78,42 @@ def bucket_label(dt: datetime, interval: str) -> str:
     return d.strftime("%b %Y")
 
 
+def bucket_range(start: date, end: date, interval: str) -> list[tuple[str, str]]:
+    """Every (key, label) bucket between start and end inclusive, in order.
+
+    Used to zero-fill series so charts show gaps as 0 instead of skipping them.
+    """
+    keys: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    cursor = start
+    while cursor <= end:
+        dt = datetime.combine(cursor, time.min)
+        key = bucket_key(dt, interval)
+        if key not in seen:
+            seen.add(key)
+            keys.append((key, bucket_label(dt, interval)))
+        if interval == "day":
+            cursor += DAY
+        elif interval == "week":
+            cursor += timedelta(days=7 - cursor.weekday())  # next Monday
+        elif interval == "year":
+            cursor = date(cursor.year + 1, 1, 1)
+        else:
+            cursor = date(cursor.year + (cursor.month // 12), cursor.month % 12 + 1, 1)
+    return keys
+
+
+def _dense(buckets: dict[str, dict], start: date, end: date, interval: str, empty: dict) -> list[dict]:
+    """Return buckets for the whole range, inserting zeroed entries where no data exists."""
+    out = []
+    for key, label in bucket_range(start, end, interval):
+        if key in buckets:
+            out.append(buckets[key])
+        else:
+            out.append({"key": key, "label": label, **empty})
+    return out
+
+
 def _revenue_query(db: Session, org_id: int, start_dt: datetime, end_dt: datetime):
     return (
         db.query(Order)
@@ -91,15 +128,18 @@ def _revenue_query(db: Session, org_id: int, start_dt: datetime, end_dt: datetim
     )
 
 
-def _orders_query(db: Session, org_id: int, start_dt: datetime, end_dt: datetime):
-    return (
-        db.query(Order)
+def _order_count(db: Session, org_id: int, start_dt: datetime, end_dt: datetime) -> int:
+    """Number of live (non-cancelled / non-refunded) orders in the window."""
+    return int(
+        db.query(func.count(Order.id))
         .filter(
             Order.organization_id == org_id,
+            Order.status.in_(REVENUE_STATUSES),
             Order.placed_at >= start_dt,
             Order.placed_at <= end_dt,
         )
-        .all()
+        .scalar()
+        or 0
     )
 
 
@@ -210,27 +250,18 @@ def _cost_of_orders(db: Session, org_id: int, start_dt: datetime, end_dt: dateti
 # Series
 # ---------------------------------------------------------------------------
 
-def _bucketize(rows: list, interval: str, value_getter):
-    """Group rows into ordered buckets by interval."""
-    buckets: dict[str, dict] = {}
-    order: list[str] = []
-    for row in rows:
-        key = bucket_key(row[0], interval)
-        if key not in buckets:
-            buckets[key] = {"key": key, "label": bucket_label(row[0], interval), "value": 0.0, "count": 0}
-            order.append(key)
-        value_getter(buckets[key], row)
-    return [buckets[k] for k in order]
-
-
 def revenue_series(db: Session, org_id: int, start: date, end: date, interval: str = "month") -> dict:
     interval = interval if interval in INTERVALS else "month"
     start_dt, end_dt = period_bounds(start, end)
     rows = _revenue_query(db, org_id, start_dt, end_dt)
 
-    series = _bucketize(
-        rows, interval, lambda b, r: (b.__setitem__("value", _round(b["value"] + float(r[1]))), b.__setitem__("count", b["count"] + 1))
-    )
+    buckets: dict[str, dict] = {}
+    for placed_at, total in rows:
+        key = bucket_key(placed_at, interval)
+        b = buckets.setdefault(key, {"key": key, "label": bucket_label(placed_at, interval), "value": 0.0, "count": 0})
+        b["value"] = _round(b["value"] + float(total))
+        b["count"] += 1
+    series = _dense(buckets, start, end, interval, {"value": 0.0, "count": 0})
     total = _round(sum((float(r[1]) for r in rows)))
     return {"interval": interval, "total": total, "points": series}
 
@@ -265,12 +296,10 @@ def sales_series(
 
     rows = query.all()
     buckets: dict[str, dict] = {}
-    order: list[str] = []
     for row in rows:
         key = bucket_key(row.date, interval)
         if key not in buckets:
             buckets[key] = {"key": key, "label": bucket_label(row.date, interval), "gross": 0.0, "net": 0.0, "refunds": 0.0, "units": 0, "visitors": 0, "conversions": 0}
-            order.append(key)
         b = buckets[key]
         b["gross"] = _round(b["gross"] + float(row.gross_revenue))
         b["refunds"] = _round(b["refunds"] + float(row.refunds))
@@ -279,9 +308,10 @@ def sales_series(
         b["visitors"] += row.visitors
         b["conversions"] += row.conversions
 
+    empty = {"gross": 0.0, "net": 0.0, "refunds": 0.0, "units": 0, "visitors": 0, "conversions": 0}
     return {
         "interval": interval,
-        "points": [buckets[k] for k in order],
+        "points": _dense(buckets, start, end, interval, empty),
         "totals": {
             "gross": _round(sum(float(r.gross_revenue) for r in rows)),
             "net": _round(sum(float(r.gross_revenue) for r in rows) - sum(float(r.refunds) for r in rows)),
@@ -320,15 +350,12 @@ def customer_series(db: Session, org_id: int, start: date, end: date, interval: 
     # then count as "known" for every later bucket (no double counting).
     created_by_bucket: dict[str, set] = {}
     buckets: dict[str, dict] = {}
-    order: list[str] = []
 
     for created_at, cid in created_rows:
         key = bucket_key(created_at, interval)
         if key not in buckets:
             buckets[key] = {"key": key, "label": bucket_label(created_at, interval), "new": 0, "returning": 0, "total": 0}
-            order.append(key)
-            created_by_bucket[key] = set()
-        created_by_bucket[key].add(cid)
+        created_by_bucket.setdefault(key, set()).add(cid)
 
     # Customers active (ordered) in each bucket.
     active_in_bucket: dict[str, set] = {}
@@ -336,16 +363,15 @@ def customer_series(db: Session, org_id: int, start: date, end: date, interval: 
         key = bucket_key(placed_at, interval)
         if key not in buckets:
             buckets[key] = {"key": key, "label": bucket_label(placed_at, interval), "new": 0, "returning": 0, "total": 0}
-            order.append(key)
         active_in_bucket.setdefault(key, set()).add(customer_id)
 
-    # Process buckets chronologically so "seen" semantics stay correct
-    # (bucket keys are ISO dates and sort lexicographically in time order).
-    order = sorted(set(order))
+    # Process every bucket in the range chronologically (including empty ones)
+    # so "seen" semantics stay correct and the cumulative total carries forward.
     seen: set = set(customers_before)
-    cumulative = 0
-    for key in order:
-        b = buckets[key]
+    cumulative = len(customers_before)  # total customer base, not just this period
+    points: list[dict] = []
+    for key, label in bucket_range(start, end, interval):
+        b = buckets.get(key, {"key": key, "label": label, "new": 0, "returning": 0, "total": 0})
         b_new = len(created_by_bucket.get(key, set()))
         seen |= created_by_bucket.get(key, set())
         b_returning = 0
@@ -359,18 +385,21 @@ def customer_series(db: Session, org_id: int, start: date, end: date, interval: 
         b["returning"] = b_returning
         cumulative += b_new
         b["total"] = cumulative
+        points.append(b)
 
-    return {"interval": interval, "points": [buckets[k] for k in order]}
+    return {"interval": interval, "points": points}
 
 
 def revenue_by_category(db: Session, org_id: int, start: date, end: date) -> list[dict]:
     start_dt, end_dt = period_bounds(start, end)
+    # Outer-join the category so revenue from uncategorized products is still
+    # reported (as "Uncategorized") instead of silently disappearing.
     rows = (
         db.query(Category.name, func.sum(OrderItem.total))
         .select_from(OrderItem)
         .join(Order, Order.id == OrderItem.order_id)
         .join(Product, Product.id == OrderItem.product_id)
-        .join(Category, Category.id == Product.category_id)
+        .outerjoin(Category, Category.id == Product.category_id)
         .filter(
             Order.organization_id == org_id,
             Order.status.in_(REVENUE_STATUSES),
@@ -381,7 +410,7 @@ def revenue_by_category(db: Session, org_id: int, start: date, end: date) -> lis
         .order_by(func.sum(OrderItem.total).desc())
         .all()
     )
-    return [{"name": name, "value": _round(total)} for name, total in rows]
+    return [{"name": name or "Uncategorized", "value": _round(total)} for name, total in rows]
 
 
 def revenue_by_source(db: Session, org_id: int, start: date, end: date) -> list[dict]:
@@ -491,6 +520,7 @@ def product_performance(
                 "price": _round(price),
             }
         )
+    result.sort(key=lambda p: (p["revenue"], p["units_sold"], p["name"]), reverse=True)
     return result
 
 
@@ -506,10 +536,12 @@ def sales_metrics(
 ) -> dict:
     series = sales_series(db, org_id, start, end, "day", region, channel, product_id, category_id)
     t = series["totals"]
+    start_dt, end_dt = period_bounds(start, end)
     orders = db.query(func.count(Order.id)).filter(
         Order.organization_id == org_id,
-        Order.placed_at >= period_bounds(start, end)[0],
-        Order.placed_at <= period_bounds(start, end)[1],
+        Order.status.in_(REVENUE_STATUSES),
+        Order.placed_at >= start_dt,
+        Order.placed_at <= end_dt,
     )
     if region:
         orders = orders.filter(Order.region == region)
@@ -560,15 +592,33 @@ def customer_analytics(db: Session, org_id: int, start: date, end: date) -> dict
     retained = len([cid for cid in active_before if cid in active_in_period])
     retention = (retained / len(active_before) * 100) if active_before else 0.0
 
-    # Lifetime value: average total spend across all customers with orders.
+    # Lifetime value: average realized spend per customer (all time).
     spend_rows = (
         db.query(Customer.id, func.coalesce(func.sum(Order.total), 0))
-        .outerjoin(Order, (Order.customer_id == Customer.id) & (Order.organization_id == org_id))
+        .outerjoin(
+            Order,
+            (Order.customer_id == Customer.id)
+            & (Order.organization_id == org_id)
+            & Order.status.in_(REVENUE_STATUSES),
+        )
         .filter(Customer.organization_id == org_id)
         .group_by(Customer.id)
         .all()
     )
-    ltv = sum(v for _, v in spend_rows) / len(spend_rows) if spend_rows else 0.0
+    ltv = float(sum(v for _, v in spend_rows)) / len(spend_rows) if spend_rows else 0.0
+
+    # Average order value of orders placed in the period (realized statuses).
+    period_rev, period_orders = (
+        db.query(func.coalesce(func.sum(Order.total), 0), func.count(Order.id))
+        .filter(
+            Order.organization_id == org_id,
+            Order.status.in_(REVENUE_STATUSES),
+            Order.placed_at >= start_dt,
+            Order.placed_at <= end_dt,
+        )
+        .first()
+    )
+    period_aov = float(period_rev) / int(period_orders) if period_orders else 0.0
 
     order_freq_rows = (
         db.query(Order.customer_id, func.count(Order.id))
@@ -607,27 +657,30 @@ def customer_analytics(db: Session, org_id: int, start: date, end: date) -> dict
         "avg_lifetime_value": _round(ltv),
         "avg_order_frequency": _round(avg_order_frequency, 2),
         "segments": segments,
-        "avg_order_value": _round(sum(v for _, v in spend_rows) / (total or 1)),
+        "avg_order_value": _round(period_aov),
     }
 
 
-def best_selling_products(db: Session, org_id: int, start: date, end: date, limit: int = 5) -> list[dict]:
-    return product_performance(db, org_id, start, end)[:limit]
-
-
 def top_products(db: Session, org_id: int, start: date, end: date, limit: int = 5) -> list[dict]:
-    return product_performance(db, org_id, start, end)[:limit]
+    """Best performers by revenue (then units) in the period."""
+    rows = product_performance(db, org_id, start, end)
+    rows.sort(key=lambda p: (p["revenue"], p["units_sold"]), reverse=True)
+    return rows[:limit]
 
 
-def low_stock_products(db: Session, org_id: int, limit: int = 10) -> list[dict]:
+def low_stock_products(db: Session, org_id: int, limit: int = 10, threshold: int | None = None) -> list[dict]:
+    """Active products at or below the organization's low-stock threshold."""
+    if threshold is None:
+        threshold = db.query(Organization.low_stock_threshold).filter(Organization.id == org_id).scalar()
+        threshold = 15 if threshold is None else int(threshold)
     rows = (
         db.query(Product)
-        .filter(Product.organization_id == org_id, Product.status == "active", Product.stock <= 15)
-        .order_by(Product.stock.asc())
+        .filter(Product.organization_id == org_id, Product.status == "active", Product.stock <= threshold)
+        .order_by(Product.stock.asc(), Product.id.asc())
         .limit(limit)
         .all()
     )
-    return [{"id": p.id, "name": p.name, "stock": p.stock, "sku": p.sku} for p in rows]
+    return [{"id": p.id, "name": p.name, "stock": p.stock, "sku": p.sku, "threshold": threshold} for p in rows]
 
 
 def recent_orders(db: Session, org_id: int, limit: int = 8) -> list[dict]:
@@ -658,7 +711,7 @@ def goal_progress(db: Session, org_id: int, goal: Goal) -> dict:
         rows = _revenue_query(db, org_id, start_dt, end_dt)
         current = _round(sum((r[1] for r in rows), Decimal("0")))
     elif goal.type == "orders":
-        current = float(len(_orders_query(db, org_id, start_dt, end_dt)))
+        current = float(_order_count(db, org_id, start_dt, end_dt))
     elif goal.type == "customers":
         current = float(
             db.query(func.count(Customer.id))

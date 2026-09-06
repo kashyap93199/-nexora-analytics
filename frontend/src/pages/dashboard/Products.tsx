@@ -1,11 +1,11 @@
 import { useMemo, useState } from "react";
-import { AlertTriangle, Package, PackagePlus, Pencil, Search, Trash2 } from "lucide-react";
+import { AlertTriangle, Download, Package, PackagePlus, Pencil, Search, Trash2 } from "lucide-react";
 import { useDateRange } from "../../contexts/DateRangeContext";
 import { useAuth } from "../../contexts/AuthContext";
 import { useApi, useMutation } from "../../hooks/useApi";
 import { useDebounced, useDocumentTitle } from "../../hooks/useUi";
 import { useToast } from "../../contexts/ToastContext";
-import { api } from "../../services/api";
+import { api, downloadCsv } from "../../services/api";
 import { PERMISSIONS, type Category, type Product, type ProductPerformance } from "../../types";
 import { apiErrorMessage, formatCurrency as fc, formatNumber } from "../../lib/utils";
 import { Button } from "../../components/ui/Button";
@@ -33,6 +33,9 @@ export default function ProductsPage() {
   useDocumentTitle("Products");
   const toast = useToast();
   const canManage = hasPermission(PERMISSIONS.productsManage);
+  const canExport = hasPermission(PERMISSIONS.salesExport);
+  const lowStockThreshold = me?.organization.low_stock_threshold ?? 15;
+  const [exporting, setExporting] = useState(false);
 
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounced(search, 350);
@@ -79,13 +82,31 @@ export default function ProductsPage() {
     [catalog.data, perfById]
   );
 
-  const totalUnits = rows.reduce((sum, r) => sum + r.units_sold, 0);
-  const totalRevenue = rows.reduce((sum, r) => sum + r.revenue, 0);
-  const lowStock = rows.filter((r) => r.stock <= 15 && r.status === "active").length;
+  // Period totals come from the analytics endpoint (whole catalog), not just
+  // the current page of the table, so the tiles do not change while paging.
+  const performance = analytics.data?.performance ?? [];
+  const totalUnits = performance.reduce((sum, r) => sum + r.units_sold, 0);
+  const totalRevenue = performance.reduce((sum, r) => sum + r.revenue, 0);
+  const lowStock = rows.filter((r) => r.stock <= lowStockThreshold && r.status === "active").length;
 
   const refreshAll = () => {
     catalog.refetch();
     analytics.refetch();
+  };
+
+  const exportCsv = async () => {
+    setExporting(true);
+    try {
+      const params = new URLSearchParams();
+      if (debouncedSearch) params.set("search", debouncedSearch);
+      if (categoryId) params.set("category_id", categoryId);
+      await downloadCsv(`/api/products/export?${params.toString()}`, "products.csv");
+      toast.success("Products exported");
+    } catch (err) {
+      toast.error(apiErrorMessage(err));
+    } finally {
+      setExporting(false);
+    }
   };
 
   return (
@@ -94,11 +115,18 @@ export default function ProductsPage() {
         title="Products"
         description="Catalog, inventory and performance — merged in one table."
         actions={
-          canManage && (
-            <Button leftIcon={<PackagePlus className="h-4 w-4" />} onClick={() => setCreateOpen(true)}>
-              Add product
-            </Button>
-          )
+          <div className="flex items-center gap-2">
+            {canExport && (
+              <Button variant="outline" leftIcon={<Download className="h-4 w-4" />} onClick={() => void exportCsv()} loading={exporting}>
+                Export CSV
+              </Button>
+            )}
+            {canManage && (
+              <Button leftIcon={<PackagePlus className="h-4 w-4" />} onClick={() => setCreateOpen(true)}>
+                Add product
+              </Button>
+            )}
+          </div>
         }
       />
 
@@ -117,7 +145,7 @@ export default function ProductsPage() {
           <p className="mt-1 text-xl font-bold text-ink tabular">{fc(totalRevenue, currency)}</p>
         </div>
         <div className={cn("rounded-xl border p-4", lowStock > 0 ? "border-amber-300/60 bg-amber-50/60 dark:border-amber-500/30 dark:bg-amber-500/5" : "border-border bg-card")}>
-          <p className="flex items-center gap-1.5 text-xs text-muted"><AlertTriangle className="h-3.5 w-3.5 text-amber-500" /> Low stock (&le;15)</p>
+          <p className="flex items-center gap-1.5 text-xs text-muted"><AlertTriangle className="h-3.5 w-3.5 text-amber-500" /> Low stock on this page (&le;{lowStockThreshold})</p>
           <p className="mt-1 text-xl font-bold text-ink tabular">{lowStock}</p>
         </div>
       </div>
@@ -181,7 +209,7 @@ export default function ProductsPage() {
                         </span>
                       </td>
                       <td className="px-5 py-3 text-right">
-                        {p.stock <= 15 && p.status === "active" ? (
+                        {p.stock <= lowStockThreshold && p.status === "active" ? (
                           <Badge tone="amber">{p.stock} left</Badge>
                         ) : p.status !== "active" ? (
                           <Badge tone="gray">{p.status}</Badge>

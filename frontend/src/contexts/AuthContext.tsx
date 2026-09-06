@@ -8,10 +8,20 @@ interface AuthContextValue {
   status: AuthStatus;
   me: MeResponse | null;
   login: (email: string, password: string) => Promise<void>;
-  register: (data: { full_name: string; email: string; password: string; organization_name: string; invite_token?: string }) => Promise<void>;
+  register: (data: RegisterPayload) => Promise<void>;
   logout: () => Promise<void>;
   hasPermission: (permission: string) => boolean;
   refreshMe: () => Promise<void>;
+  /** Re-issue tokens scoped to another organization the user belongs to. */
+  switchOrganization: (organizationId: number) => Promise<void>;
+}
+
+export interface RegisterPayload {
+  full_name: string;
+  email: string;
+  password: string;
+  organization_name?: string;
+  invite_token?: string;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -64,8 +74,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const register = useCallback(
-    async (data: { full_name: string; email: string; password: string; organization_name: string; invite_token?: string }) => {
+    async (data: RegisterPayload) => {
       const auth = await api.post<AuthResponse>("/api/auth/register", data);
+      await applyAuth(auth);
+    },
+    [applyAuth]
+  );
+
+  const switchOrganization = useCallback(
+    async (organizationId: number) => {
+      const auth = await api.post<AuthResponse>("/api/auth/switch-organization", { organization_id: organizationId });
       await applyAuth(auth);
     },
     [applyAuth]
@@ -88,8 +106,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo(
-    () => ({ status, me, login, register, logout, hasPermission, refreshMe }),
-    [status, me, login, register, logout, hasPermission, refreshMe]
+    () => ({ status, me, login, register, logout, hasPermission, refreshMe, switchOrganization }),
+    [status, me, login, register, logout, hasPermission, refreshMe, switchOrganization]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

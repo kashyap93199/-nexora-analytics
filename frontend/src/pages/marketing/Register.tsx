@@ -30,13 +30,21 @@ export default function RegisterPage() {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    const validation = validateRegistration(form);
+    // Invited users join an existing workspace: the organization field is hidden
+    // and must not block submission.
+    const validation = validateRegistration(form, { requireOrganization: !inviteToken });
     setErrors(validation);
     if (Object.keys(validation).length > 0) return;
     setLoading(true);
     setServerError("");
     try {
-      await register({ ...form, invite_token: inviteToken });
+      await register({
+        full_name: form.full_name.trim(),
+        email: form.email.trim(),
+        password: form.password,
+        organization_name: inviteToken ? undefined : form.organization_name.trim(),
+        invite_token: inviteToken,
+      });
       toast.success(inviteToken ? "Welcome to your team workspace!" : "Your workspace is ready 🎉");
       navigate("/app/overview", { replace: true });
     } catch (err) {

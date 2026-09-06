@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, Link2, MailPlus, Trash2, UserPlus, Users } from "lucide-react";
+import { Check, Link2, MailPlus, RefreshCw, Trash2, UserPlus, Users } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useApi, useMutation } from "../../hooks/useApi";
 import { useDocumentTitle } from "../../hooks/useUi";
@@ -35,6 +35,17 @@ export default function TeamPage() {
   const { data, loading, error, refetch } = useApi<Member[]>("/api/team");
   const roleMutation = useMutation(async ({ memberId, role }: { memberId: number; role: string }) => api.put(`/api/team/${memberId}/role`, { role }));
   const removeMutation = useMutation(async () => api.delete(`/api/team/${removeTarget?.id}`));
+  const resendMutation = useMutation(async (memberId: number) => api.post<{ invite_token: string }>(`/api/team/${memberId}/resend`));
+
+  const resendInvite = async (member: Member) => {
+    try {
+      const result = await resendMutation.run(member.id);
+      await copyInvite(result.invite_token);
+      refetch();
+    } catch (err) {
+      toast.error(apiErrorMessage(err));
+    }
+  };
 
   const changeRole = async (memberId: number, role: string) => {
     try {
@@ -106,6 +117,8 @@ export default function TeamPage() {
                   const self = member.user_id === me?.user.id;
                   const canEditRole = canManage && !self && member.role !== "owner";
                   const canRemove = canManage && !self && member.role !== "owner";
+                  // Only owners may grant the owner role; hide it for everyone else.
+                  const roleOptions = ROLES.filter((r) => isOwner || r.value !== "owner");
                   return (
                     <tr key={member.id} className="transition hover:bg-ink/[0.02] dark:hover:bg-white/[0.02]">
                       <td className="px-5 py-3">
@@ -128,7 +141,7 @@ export default function TeamPage() {
                             className="h-8 rounded-lg border border-border bg-card px-2 text-[13px] font-medium text-ink"
                             aria-label={`Role for ${member.full_name}`}
                           >
-                            {ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+                            {roleOptions.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
                           </select>
                         ) : (
                           <RoleBadge role={member.role} />
@@ -145,6 +158,17 @@ export default function TeamPage() {
                       {canManage && (
                         <td className="px-5 py-3">
                           <div className="flex items-center justify-end gap-1">
+                            {member.status === "pending" && (
+                              <button
+                                onClick={() => void resendInvite(member)}
+                                disabled={resendMutation.loading}
+                                className="rounded-md p-1.5 text-muted transition hover:bg-ink/[0.05] hover:text-ink disabled:opacity-50 dark:hover:bg-white/[0.08]"
+                                aria-label={`Copy a new invite link for ${member.email}`}
+                                title="Generate & copy a fresh invite link"
+                              >
+                                <RefreshCw className="h-4 w-4" />
+                              </button>
+                            )}
                             {canRemove && (
                               <button onClick={() => setRemoveTarget(member)} className="rounded-md p-1.5 text-muted transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10 dark:hover:text-red-400" aria-label={`Remove ${member.full_name}`}>
                                 <Trash2 className="h-4 w-4" />

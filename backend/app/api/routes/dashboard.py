@@ -20,6 +20,17 @@ def _default_range() -> tuple[date, date]:
     return start, end
 
 
+def _interval_for(start: date, end: date) -> str:
+    days = (end - start).days + 1
+    if days <= 45:
+        return "day"
+    if days <= 180:
+        return "week"
+    if days <= 3 * 366:
+        return "month"
+    return "year"
+
+
 @router.get("/overview")
 def overview(
     start: date | None = Query(None),
@@ -33,13 +44,16 @@ def overview(
     if start > end:
         start, end = end, start
 
+    # Pick a chart granularity that suits the range so a 7-day view is not
+    # collapsed into a single "month" bucket and a 2-year view is not 700 points.
+    interval = _interval_for(start, end)
     kpis = analytics.kpis(db, org_id, start, end)
     return {
-        "range": {"start": start.isoformat(), "end": end.isoformat()},
+        "range": {"start": start.isoformat(), "end": end.isoformat(), "interval": interval},
         "kpis": kpis,
-        "revenue_series": analytics.revenue_series(db, org_id, start, end, "month"),
-        "sales_series": analytics.sales_series(db, org_id, start, end, "month"),
-        "customer_series": analytics.customer_series(db, org_id, start, end, "month"),
+        "revenue_series": analytics.revenue_series(db, org_id, start, end, interval),
+        "sales_series": analytics.sales_series(db, org_id, start, end, interval),
+        "customer_series": analytics.customer_series(db, org_id, start, end, interval),
         "revenue_by_category": analytics.revenue_by_category(db, org_id, start, end),
         "revenue_by_source": analytics.revenue_by_source(db, org_id, start, end),
         "geographic": analytics.geographic_performance(db, org_id, start, end),

@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
+  ArrowLeftRight,
   BarChart3,
   Building2,
+  Check,
   FileBarChart2,
   HelpCircle,
   LayoutDashboard,
@@ -21,6 +23,8 @@ import {
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { useAuth } from "../../contexts/AuthContext";
+import { useToast } from "../../contexts/ToastContext";
+import { apiErrorMessage } from "../../lib/utils";
 import { PERMISSIONS } from "../../types";
 import { Logo } from "./Logo";
 import { ThemeToggle } from "./ThemeToggle";
@@ -59,12 +63,31 @@ const NAV_SECTIONS: { section: string; items: { to: string; label: string; icon:
 ];
 
 export function DashboardLayout() {
-  const { me: authMe, hasPermission, logout } = useAuth();
+  const { me: authMe, hasPermission, logout, switchOrganization } = useAuth();
+  const toast = useToast();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [switching, setSwitching] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+
+  const workspaces = authMe?.workspaces ?? [];
+  const canSwitch = workspaces.length > 1;
+
+  const handleSwitch = async (organizationId: number, name: string) => {
+    if (switching || organizationId === authMe?.organization.id) return;
+    setSwitching(true);
+    try {
+      await switchOrganization(organizationId);
+      toast.success(`Switched to ${name}`);
+      navigate("/app/overview");
+    } catch (err) {
+      toast.error(apiErrorMessage(err));
+    } finally {
+      setSwitching(false);
+    }
+  };
 
   // Close mobile sidebar on navigation.
   useEffect(() => {
@@ -202,6 +225,25 @@ export function DashboardLayout() {
                       {authMe?.role}
                     </span>
                   </div>
+                  {canSwitch && (
+                    <div className="border-b border-border py-1">
+                      <p className="flex items-center gap-1.5 px-3 pb-1 pt-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted">
+                        <ArrowLeftRight className="h-3 w-3" /> Switch workspace
+                      </p>
+                      {workspaces.map((w) => {
+                        const active = w.id === authMe?.organization.id;
+                        return (
+                          <MenuItem key={w.id} onClick={() => { close(); void handleSwitch(w.id, w.name); }} disabled={switching || active}>
+                            <span className="flex min-w-0 flex-1 flex-col text-left">
+                              <span className="truncate">{w.name}</span>
+                              <span className="text-[11px] capitalize text-muted">{w.role}</span>
+                            </span>
+                            {active && <Check className="h-3.5 w-3.5 text-primary-600 dark:text-primary-400" />}
+                          </MenuItem>
+                        );
+                      })}
+                    </div>
+                  )}
                   <MenuItem onClick={() => { close(); navigate("/app/settings"); }}>
                     <Settings className="h-4 w-4 text-muted" /> Settings
                   </MenuItem>

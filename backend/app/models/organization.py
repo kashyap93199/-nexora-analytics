@@ -5,6 +5,7 @@ from sqlalchemy import (
     Column,
     DateTime,
     ForeignKey,
+    Integer,
     String,
     Table,
     Text,
@@ -53,6 +54,8 @@ class Organization(Base):
     slug: Mapped[str] = mapped_column(String(120), unique=True, index=True, nullable=False)
     plan: Mapped[str] = mapped_column(String(40), default="free", nullable=False)
     currency: Mapped[str] = mapped_column(String(8), default="USD", nullable=False)
+    # Products at or below this stock level are flagged as "low stock".
+    low_stock_threshold: Mapped[int] = mapped_column(Integer, default=15, server_default="15", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now(), nullable=False

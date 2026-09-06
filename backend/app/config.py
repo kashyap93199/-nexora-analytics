@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_REQUESTS: int = 120
     RATE_LIMIT_WINDOW_SECONDS: int = 60
+    # Honour X-Forwarded-For / X-Real-IP (set to true when running behind the
+    # nginx container or another trusted reverse proxy).
+    TRUST_PROXY_HEADERS: bool = False
 
     @property
     def cors_origins_list(self) -> list[str]:

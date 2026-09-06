@@ -1,11 +1,11 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
-import { ChevronDown, ChevronUp, MoreHorizontal, Plus, Search, ShoppingBag } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { ChevronDown, ChevronUp, Download, MoreHorizontal, Plus, Search, ShoppingBag } from "lucide-react";
 import { useAuth } from "../../contexts/AuthContext";
 import { useApi, useMutation } from "../../hooks/useApi";
 import { useDebounced, useDocumentTitle } from "../../hooks/useUi";
 import { useToast } from "../../contexts/ToastContext";
-import { api } from "../../services/api";
+import { api, downloadCsv } from "../../services/api";
 import { PERMISSIONS, type Channel, type Customer, type Order, type OrderStatus } from "../../types";
 import { apiErrorMessage, formatCurrency as fc, formatDateTime } from "../../lib/utils";
 import { Button } from "../../components/ui/Button";
@@ -20,14 +20,26 @@ import { Pagination } from "../../components/ui/Pagination";
 import { cn } from "../../lib/utils";
 
 const STATUSES: OrderStatus[] = ["pending", "processing", "shipped", "delivered", "cancelled", "refunded"];
-const ORDER_STATUS_OPTIONS: OrderStatus[] = ["pending", "processing", "shipped", "delivered"];
+
+/** Mirrors the server-side state machine so the UI only offers valid moves. */
+export const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
+  pending: ["processing", "shipped", "delivered", "cancelled"],
+  processing: ["shipped", "delivered", "cancelled"],
+  shipped: ["delivered", "cancelled", "refunded"],
+  delivered: ["refunded"],
+  cancelled: [],
+  refunded: [],
+};
 
 export default function OrdersPage() {
   const { me, hasPermission } = useAuth();
   const currency = me?.organization.currency ?? "USD";
   useDocumentTitle("Orders");
   const toast = useToast();
+  const navigate = useNavigate();
   const canManage = hasPermission(PERMISSIONS.ordersManage);
+  const canExport = hasPermission(PERMISSIONS.salesExport);
+  const [exporting, setExporting] = useState(false);
 
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounced(search, 350);
@@ -88,11 +100,37 @@ export default function OrdersPage() {
         title="Orders"
         description="Search, filter and manage every order in your store."
         actions={
-          canManage && (
-            <Button leftIcon={<Plus className="h-4 w-4" />} onClick={() => setCreateOpen(true)}>
-              New order
-            </Button>
-          )
+          <div className="flex items-center gap-2">
+            {canExport && (
+              <Button
+                variant="outline"
+                leftIcon={<Download className="h-4 w-4" />}
+                loading={exporting}
+                onClick={async () => {
+                  setExporting(true);
+                  try {
+                    const exportParams = new URLSearchParams();
+                    if (debouncedSearch) exportParams.set("search", debouncedSearch);
+                    if (status) exportParams.set("status", status);
+                    if (channel) exportParams.set("channel", channel);
+                    await downloadCsv(`/api/orders/export?${exportParams.toString()}`, "orders.csv");
+                    toast.success("Orders exported");
+                  } catch (err) {
+                    toast.error(apiErrorMessage(err));
+                  } finally {
+                    setExporting(false);
+                  }
+                }}
+              >
+                Export CSV
+              </Button>
+            )}
+            {canManage && (
+              <Button leftIcon={<Plus className="h-4 w-4" />} onClick={() => setCreateOpen(true)}>
+                New order
+              </Button>
+            )}
+          </div>
         }
       />
 
@@ -154,7 +192,10 @@ export default function OrdersPage() {
                             {(close) => (
                               <>
                                 <p className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-muted">Change status</p>
-                                {STATUSES.filter((s) => s !== o.status).map((s) => (
+                                {ALLOWED_TRANSITIONS[o.status].length === 0 && (
+                                  <p className="px-3 pb-2 text-xs text-muted">This order is {o.status} — no further changes.</p>
+                                )}
+                                {ALLOWED_TRANSITIONS[o.status].map((s) => (
                                   <MenuItem key={s} onClick={() => { close(); void changeStatus(o.id, s); }} disabled={setStatusMutation.loading}>
                                     <span className="capitalize">{s}</span>
                                   </MenuItem>
@@ -180,9 +221,9 @@ export default function OrdersPage() {
                             >
                               {(close) => (
                                 <>
-                                  <MenuItem onClick={() => { close(); window.open(`/app/orders/${o.id}`, "_self"); }}>View details</MenuItem>
-                                  {ORDER_STATUS_OPTIONS.map((s) => (
-                                    <MenuItem key={s} onClick={() => { close(); void changeStatus(o.id, s); }} disabled={o.status === s}>
+                                  <MenuItem onClick={() => { close(); navigate(`/app/orders/${o.id}`); }}>View details</MenuItem>
+                                  {ALLOWED_TRANSITIONS[o.status].map((s) => (
+                                    <MenuItem key={s} onClick={() => { close(); void changeStatus(o.id, s); }}>
                                       Mark as {s}
                                     </MenuItem>
                                   ))}
