@@ -11,18 +11,37 @@ from app.models import OrganizationMember, User
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
+# Fallback header for the access token. Some hosted preview / tunnel proxies
+# (e.g. sandbox preview URLs) strip the standard ``Authorization`` header before
+# it reaches the app, which breaks every authenticated request even though the
+# login itself succeeds. The frontend sends the token in both places.
+ACCESS_TOKEN_HEADER = "x-access-token"
+
+
+def extract_access_token(request: Request, credentials: HTTPAuthorizationCredentials | None) -> str | None:
+    """Return the raw bearer token from ``Authorization`` or the fallback header."""
+    if credentials is not None and credentials.scheme.lower() == "bearer" and credentials.credentials:
+        return credentials.credentials
+    fallback = request.headers.get(ACCESS_TOKEN_HEADER, "").strip()
+    if fallback.lower().startswith("bearer "):
+        fallback = fallback[7:].strip()
+    return fallback or None
+
 
 def get_current_user(
     request: Request,
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ) -> User:
-    if credentials is None:
+    token = extract_access_token(request, credentials)
+    if token is None:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
         )
     try:
-        payload = decode_token(credentials.credentials, expected_type=TOKEN_TYPE_ACCESS)
+        payload = decode_token(token, expected_type=TOKEN_TYPE_ACCESS)
         user_id = int(payload["sub"])
     except (jwt.PyJWTError, KeyError, ValueError):
         raise HTTPException(

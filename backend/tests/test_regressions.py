@@ -478,3 +478,26 @@ def test_goal_order_progress_ignores_cancelled_orders(client: TestClient, auth_h
     assert r.status_code == 201, r.text
     goal = next(g for g in client.get("/api/goals", headers=auth_headers).json() if g["id"] == r.json()["id"])
     assert goal["progress"] == 1.0
+
+
+# ---------------------------------------------------------------------------
+# Auth header fallback (hosted preview proxies may strip ``Authorization``)
+# ---------------------------------------------------------------------------
+
+
+def test_access_token_accepted_via_fallback_header(client, auth_headers):
+    token = auth_headers["Authorization"].split(" ", 1)[1]
+
+    r = client.get("/api/auth/me", headers={"X-Access-Token": token})
+    assert r.status_code == 200, r.text
+    assert r.json()["user"]["email"]
+
+    # "Bearer " prefix is tolerated on the fallback header too.
+    r = client.get("/api/auth/me", headers={"X-Access-Token": f"Bearer {token}"})
+    assert r.status_code == 200, r.text
+
+    # Standard header still wins and invalid fallback tokens are rejected.
+    r = client.get("/api/auth/me", headers={"X-Access-Token": "not-a-token"})
+    assert r.status_code == 401
+    r = client.get("/api/auth/me")
+    assert r.status_code == 401

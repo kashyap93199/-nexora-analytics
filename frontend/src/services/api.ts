@@ -7,6 +7,20 @@ const BASE_URL = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/
 const ACCESS_KEY = "nexora_access_token";
 const REFRESH_KEY = "nexora_refresh_token";
 
+/**
+ * Attach the access token. It is sent as the standard `Authorization: Bearer`
+ * header AND as `X-Access-Token`: some hosted preview / tunnel proxies strip
+ * `Authorization` before it reaches the API, which would otherwise make every
+ * request after login fail with 401. The backend accepts either.
+ */
+function withAuth(headers: Headers, token: string | null): Headers {
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+    headers.set("X-Access-Token", token);
+  }
+  return headers;
+}
+
 export const tokenStore = {
   getAccess: () => localStorage.getItem(ACCESS_KEY),
   getRefresh: () => localStorage.getItem(REFRESH_KEY),
@@ -70,8 +84,7 @@ async function request<T>(path: string, options: RequestInit = {}, retried = fal
   if (options.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
-  const token = tokenStore.getAccess();
-  if (token) headers.set("Authorization", `Bearer ${token}`);
+  withAuth(headers, tokenStore.getAccess());
 
   const res = await fetch(`${BASE_URL}${path}`, { ...options, headers });
 
@@ -109,9 +122,7 @@ export const api = {
 
 /** Trigger a CSV download from an authenticated GET endpoint. */
 export async function downloadCsv(path: string, filename: string): Promise<void> {
-  const headers = new Headers();
-  const token = tokenStore.getAccess();
-  if (token) headers.set("Authorization", `Bearer ${token}`);
+  const headers = withAuth(new Headers(), tokenStore.getAccess());
   const res = await fetch(`${BASE_URL}${path}`, { headers });
   if (!res.ok) throw new ApiError(res.status, null, `Download failed (${res.status})`);
   const blob = await res.blob();

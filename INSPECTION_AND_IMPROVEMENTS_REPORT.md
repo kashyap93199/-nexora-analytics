@@ -245,3 +245,18 @@ Limitation: this sandbox has no browser binary (Chromium download is blocked), s
 - Adding a palette = one `[data-accent="name"]` block in `index.css` + an entry in `ACCENTS` / `ACCENT_META`.
 - Anything that should lift in depth mode: add `card-3d card-3d-hover` (or use `<Card hover>`). Anything decorative should be `aria-hidden`.
 - Depth mode is CSS-only apart from the tilt hook; turning it off (`nexora-depth=off`) restores the exact pre-refresh flat design.
+
+---
+
+## 10. Follow-up: login worked but the session did not stick behind the preview proxy
+
+**Symptom (reported by the user):** the demo credentials were "not working" in the hosted preview. The API log told a different story: `POST /api/auth/login → 200`, then `GET /api/auth/me → 401`, `POST /api/auth/refresh → 200`, `GET /api/auth/me → 401` — so the password was accepted, but every *authenticated* request was rejected. The same flow via `curl` inside the sandbox returned 200.
+
+**Root cause:** the hosted preview URL sits behind a proxy that strips the standard `Authorization` header before the request reaches the app. Requests that carry the token in the JSON body (login, refresh) succeed; anything that relies on `Authorization: Bearer …` fails, so the app bounces back to the login page and it *looks* like bad credentials.
+
+**Fix (defence in depth, no behaviour change for normal deployments):**
+- `frontend/src/services/api.ts` — `withAuth()` sends the access token as **both** `Authorization: Bearer <token>` and `X-Access-Token: <token>` (also for CSV downloads).
+- `backend/app/api/deps.py` — `extract_access_token()` reads `Authorization` first and falls back to `X-Access-Token` (with or without a `Bearer ` prefix). Missing/invalid tokens still yield 401 with a `WWW-Authenticate: Bearer` challenge. CORS already allows all headers.
+- Test: `test_access_token_accepted_via_fallback_header` (backend now **54 passed**).
+
+Nothing else changes: the standard header still takes precedence, nginx/docker deployments forward both headers untouched.
